@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
+  "name": "auxilia",
+  "version": "1.0.0",
+  "description": "Reusable Claude Code skills, packaged as installable plugins.",
+  "owner": {
+    "name": "Dallan Baker",
+    "email": "dallan@bakerwebsolutions.com"
+  },
+  "metadata": {
+    "pluginRoot": "./plugins"
+  },
+  "plugins": [
+    {
+      "name": "research-spike",
+      "description": "Run a reusable external research spike: tighten a topic into parallel workstreams, fan out web-research agents, synthesize findings, and save durable artifacts under docs/research-spike/.",
+      "version": "1.0.0",
+      "author": {
+        "name": "Dallan Baker",
+        "email": "dallan@bakerwebsolutions.com"
+      },
+      "source": "./plugins/research-spike",
+      "category": "research",
+      "homepage": "https://github.com/bakerwebsolutions/auxilia/tree/master/plugins/research-spike"
+    }
+  ]
+}

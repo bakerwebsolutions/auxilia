@@ -1,0 +1,11 @@
+{
+  "name": "research-spike",
+  "description": "Run a reusable external research spike: tighten a topic into parallel workstreams, fan out web-research agents, synthesize findings, and save durable artifacts under docs/research-spike/.",
+  "version": "1.0.0",
+  "author": {
+    "name": "Dallan Baker",
+    "email": "dallan@bakerwebsolutions.com"
+  },
+  "homepage": "https://github.com/bakerwebsolutions/auxilia/tree/master/plugins/research-spike",
+  "license": "MIT"
+}
