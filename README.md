@@ -9,6 +9,7 @@ on any machine.
 | Plugin | Description | Version |
 |--------|-------------|---------|
 | [research-spike](plugins/research-spike/README.md) | Fan out parallel web-research agents, synthesize findings, and save durable research artifacts | `1.0.0` |
+| [orchestrate](plugins/orchestrate/README.md) | Keep Opus orchestrating and delegate downward — Sonnet implements, Haiku explores; config-driven decompose-and-delegate | `1.0.0` |
 
 ## Install
 

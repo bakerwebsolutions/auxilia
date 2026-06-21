@@ -1,0 +1,15 @@
+{
+  "$schema": "./orchestrate.config.schema.json",
+  "autonomy": "propose",
+  "threshold": {
+    "maxParallelAuto": 3,
+    "maxFilesAuto": 5
+  },
+  "tiers": {
+    "explore": "haiku",
+    "implement": "sonnet",
+    "verify": "sonnet"
+  },
+  "doctrine": "standard",
+  "alwaysPassModelExplicitly": true
+}

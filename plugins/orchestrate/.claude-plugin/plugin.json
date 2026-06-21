@@ -1,0 +1,11 @@
+{
+  "name": "orchestrate",
+  "description": "Keep Opus as the orchestrator and delegate downward: implementation to Sonnet, exploration to Haiku. Ships a SessionStart delegation doctrine, an /orchestrate decompose-and-delegate skill, and pre-tiered explorer/implementer/verifier subagents. Config-driven autonomy (propose | auto | threshold).",
+  "version": "1.0.0",
+  "author": {
+    "name": "Dallan Baker",
+    "email": "dallan@bakerwebsolutions.com"
+  },
+  "homepage": "https://github.com/bakerwebsolutions/auxilia/tree/master/plugins/orchestrate",
+  "license": "MIT"
+}

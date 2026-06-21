@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "orchestrate plugin config",
+  "description": "Tuning knobs for the orchestrate plugin. The SessionStart hook and the /orchestrate skill both read this file so behavior stays consistent across entry points.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+    "autonomy": {
+      "description": "How autonomous Opus is once it has a delegation plan. propose = show the plan and wait for OK; auto = fan out immediately; threshold = auto when under the threshold limits, otherwise propose.",
+      "enum": ["propose", "auto", "threshold"],
+      "default": "propose"
+    },
+    "threshold": {
+      "description": "Limits used when autonomy=threshold. At or below these, fan out automatically; above either, propose first.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "maxParallelAuto": { "type": "integer", "minimum": 1, "default": 3 },
+        "maxFilesAuto": { "type": "integer", "minimum": 1, "default": 5 }
+      }
+    },
+    "tiers": {
+      "description": "Which model each kind of delegated work runs on. Aliases (opus|sonnet|haiku|fable) or a full model ID.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "explore": { "type": "string", "default": "haiku" },
+        "implement": { "type": "string", "default": "sonnet" },
+        "verify": { "type": "string", "default": "sonnet" }
+      }
+    },
+    "doctrine": {
+      "description": "How forcefully the SessionStart hook injects the delegation doctrine. off = no injection; standard = inject as guidance; strict = inject as a hard rule.",
+      "enum": ["off", "standard", "strict"],
+      "default": "standard"
+    },
+    "alwaysPassModelExplicitly": {
+      "description": "Instruct Opus to pass the model parameter explicitly on every Agent call, working around the frontmatter model bug (anthropics/claude-code#44385).",
+      "type": "boolean",
+      "default": true
+    }
+  }
+}
