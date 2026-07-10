@@ -5,10 +5,21 @@
     "maxParallelAuto": 3,
     "maxFilesAuto": 5
   },
-  "tiers": {
-    "explore": "haiku",
-    "implement": "sonnet",
-    "verify": "sonnet"
+  "roles": {
+    "orchestrator": "opus",
+    "builder": "sonnet",
+    "scout": "haiku"
+  },
+  "workflows": {
+    "research":  { "enabled": true,  "maxParallel": 4 },
+    "design":    { "enabled": true,  "maxParallel": 3 },
+    "implement": { "enabled": true,  "maxParallel": 3 },
+    "debug":     { "enabled": true,  "maxParallel": 4 },
+    "review":    { "enabled": true,  "maxParallel": 4 },
+    "optimize":  { "enabled": false, "maxParallel": 3 }
+  },
+  "escalation": {
+    "scoutToBuilder": true
   },
   "doctrine": "standard",
   "alwaysPassModelExplicitly": true

@@ -1,13 +1,13 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "orchestrate plugin config",
-  "description": "Tuning knobs for the orchestrate plugin. The SessionStart hook and the /orchestrate skill both read this file so behavior stays consistent across entry points.",
+  "description": "Tuning knobs for the orchestrate router. The SessionStart hook, the /orchestrate router skill, and the /orchestrate-workflows companion all read this file so behavior stays consistent across entry points. Config is layered (deep-merged, first present wins per key): repo .claude/ overrides user ~/.claude/ overrides the shipped default.",
   "type": "object",
   "additionalProperties": false,
   "properties": {
     "$schema": { "type": "string" },
     "autonomy": {
-      "description": "How autonomous Opus is once it has a delegation plan. propose = show the plan and wait for OK; auto = fan out immediately; threshold = auto when under the threshold limits, otherwise propose.",
+      "description": "How autonomous the orchestrator is once it has classified the task and built a plan. propose = announce the workflow + plan and wait for OK (default); auto = run immediately; threshold = auto only when under the threshold limits, otherwise propose.",
       "enum": ["propose", "auto", "threshold"],
       "default": "propose"
     },
@@ -20,14 +20,35 @@
         "maxFilesAuto": { "type": "integer", "minimum": 1, "default": 5 }
       }
     },
-    "tiers": {
-      "description": "Which model each kind of delegated work runs on. Aliases (opus|sonnet|haiku|fable) or a full model ID.",
+    "roles": {
+      "description": "Which model plays each role. Aliases (opus|sonnet|haiku|fable) or a full model ID. The orchestrator is the top tier — the running session and any peer instance it spawns for adversarial judging/verdicts. Swapping orchestrator to fable makes fable fully replace opus everywhere the top tier is used. builder implements and writes prose; scout does read-only research/search.",
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "explore": { "type": "string", "default": "haiku" },
-        "implement": { "type": "string", "default": "sonnet" },
-        "verify": { "type": "string", "default": "sonnet" }
+        "orchestrator": { "type": "string", "default": "opus" },
+        "builder": { "type": "string", "default": "sonnet" },
+        "scout": { "type": "string", "default": "haiku" }
+      }
+    },
+    "workflows": {
+      "description": "Which pre-curated workflows the router may select, and per-workflow fan-out caps. A disabled workflow is never routed to; the router falls back to the closest enabled workflow or asks.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "research":  { "$ref": "#/$defs/workflow" },
+        "design":    { "$ref": "#/$defs/workflow" },
+        "implement": { "$ref": "#/$defs/workflow" },
+        "debug":     { "$ref": "#/$defs/workflow" },
+        "review":    { "$ref": "#/$defs/workflow" },
+        "optimize":  { "$ref": "#/$defs/workflow" }
+      }
+    },
+    "escalation": {
+      "description": "Cascade behavior. When a scout (Haiku) returns thin or low-confidence output on a leg, re-run that one leg at the builder tier before giving up.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "scoutToBuilder": { "type": "boolean", "default": true }
       }
     },
     "doctrine": {
@@ -36,9 +57,24 @@
       "default": "standard"
     },
     "alwaysPassModelExplicitly": {
-      "description": "Instruct Opus to pass the model parameter explicitly on every Agent call, working around the frontmatter model bug (anthropics/claude-code#44385).",
+      "description": "Instruct the orchestrator to pass the model parameter explicitly on every Agent call, working around the frontmatter model bug (anthropics/claude-code#44385).",
       "type": "boolean",
       "default": true
+    }
+  },
+  "$defs": {
+    "workflow": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean", "default": true },
+        "maxParallel": {
+          "description": "Cap on parallel fan-out agents for this workflow. Guards against the over-fan-out failure mode (Anthropic multi-agent research: fan-out is ~15x the tokens of a single pass).",
+          "type": "integer",
+          "minimum": 1,
+          "default": 4
+        }
+      }
     }
   }
 }
