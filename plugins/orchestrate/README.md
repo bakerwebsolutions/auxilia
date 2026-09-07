@@ -1,6 +1,6 @@
 # orchestrate
 
-A **task router** for Claude Code. Instead of one session doing everything, `/orchestrate`
+A **task router** for Claude Code and Codex. Instead of one session doing everything, `/orchestrate`
 detects *what kind of task* this is, then runs a **pre-curated, model-tiered workflow** for
 it. Unlike model-router tools that *demote your main session* to save cost, orchestrate keeps
 the hard thinking on the top tier and pushes only well-defined execution to cheaper ones.
@@ -29,14 +29,14 @@ Work routes to **three roles**; config maps roles → models.
 
 | Role | Does | Default | Read/write |
 |------|------|---------|-----------|
-| **orchestrator** | classify · reason on the prelude · judge/verify adversarially · synthesize | `opus` | you + peer instances for judging |
-| **builder** | implement code · write prose · run tests | `sonnet` | writes |
-| **scout** | search · locate · map · external research | `haiku` | read-only |
+| **orchestrator** | classify · reason on the prelude · judge/verify adversarially · synthesize | harness profile | you + peer instances for judging |
+| **builder** | implement code · write prose · run tests | harness profile | writes |
+| **scout** | search · locate · map · external research | harness profile | read-only |
 
-**Swapping the orchestrator swaps the whole top tier.** Say "use fable to orchestrate" in
-natural language and Fable **fully replaces Opus** for that run — it coordinates *and* does
-the deep reasoning and adversarial judging. Builder stays Sonnet, scout stays Haiku. A
-natural-language override always beats the config file for that one run.
+**The runtime chooses the tier names.** A role begins with the profile for the running
+harness, then an explicit config or natural-language override wins for that run. The router
+only passes a model value when it is advertised by that runtime; otherwise it inherits the
+harness default. This prevents stale Claude aliases being sent to Codex and vice versa.
 
 ## The six workflows
 
@@ -63,12 +63,9 @@ refactor · test · docs · small-migration → **implement**; security-audit �
 | **`/orchestrate`** (skill) | The router: load config → classify → announce → run the workflow recipe → converge. |
 | **`/orchestrate-workflows`** (skill) | Companion: **run** a workflow directly (bypass classification), **manage** the layered config, or **explain** what the router would pick. |
 | **Workflow recipes** (`skills/orchestrate/workflows/*.md`) | One curated recipe per workflow — prelude, fan-out, convergence, flavors. |
-| **Delegation doctrine** (`SessionStart` hook) | Injects the routing/roles doctrine every session (`doctrine: off` to disable). |
-| **`explorer`** (agent · Haiku) | Read-only code search & discovery — a scout. |
-| **`researcher`** (agent · Haiku) | Read-only external/web research — a scout. |
-| **`implementer`** (agent · Sonnet) | Targeted, well-scoped implementation — a builder. |
-| **`verifier`** (agent · Sonnet) | Independently checks done-criteria (tests/lint/diff). |
-| **`reviewer`** (agent · Sonnet) | Single-lens, read-only, adversarial code review. |
+| **Delegation doctrine** (`SessionStart` hook) | Claude Code injection of the routing/roles doctrine (`doctrine: off` to disable). |
+| **Claude agents** (`agents/`) | Claude-frontmatter versions of the scout and builder roles. |
+| **Codex agents** (`codex/agents/`) | Native TOML versions of explorer, researcher, implementer, verifier, and reviewer. |
 
 The agents double as **agent-team teammate types** since they carry their own `tools` and `model`.
 
@@ -79,21 +76,28 @@ The agents double as **agent-team teammate types** since they carry their own `t
 /plugin install orchestrate@auxilia
 ```
 
-Restart the session after install so the `SessionStart` hook and agents load.
+Restart Claude Code after installation so its `SessionStart` hook and agents load. For Codex,
+install the router skill through its normal skill mechanism and copy `codex/agents/*.toml`
+into `.codex/agents/` (or `~/.codex/agents/`); see [`codex/README.md`](codex/README.md).
 
 ## Configuration
 
 Behavior is driven by `orchestrate.config.json`, **layered and deep-merged** (first present
 wins per key), so your user config sets global defaults and a repo overrides specifics:
 
-1. `.claude/orchestrate.config.json` (repo)
-2. `~/.claude/orchestrate.config.json` (user)
+1. Harness project config (for example `.claude/orchestrate.config.json` or a Codex project config)
+2. Harness user config
 3. the shipped default in the plugin root
 
 ```jsonc
 {
   "autonomy": "propose",
-  "roles": { "orchestrator": "opus", "builder": "sonnet", "scout": "haiku" },
+  "harness": "auto",
+  "roles": { "orchestrator": "auto", "builder": "auto", "scout": "auto" },
+  "harnessProfiles": {
+    "claude": { "roles": { "orchestrator": "opus", "builder": "sonnet", "scout": "haiku" } },
+    "codex": { "roles": { "orchestrator": "gpt-5.6-sol", "builder": "gpt-5.6-terra", "scout": "gpt-5.6-luna" } }
+  },
   "workflows": {
     "research":  { "enabled": true,  "maxParallel": 4 },
     "design":    { "enabled": true,  "maxParallel": 3 },
@@ -111,37 +115,50 @@ wins per key), so your user config sets global defaults and a repo overrides spe
 | Key | Values | Meaning |
 |-----|--------|---------|
 | `autonomy` | `propose` · `auto` · `threshold` | After classifying + planning: announce and wait (default), run immediately, or auto only under the thresholds. |
-| `roles.orchestrator` / `builder` / `scout` | model alias or ID | Which model plays each role. Set `orchestrator` to `fable` to make Fable the top tier permanently. |
+| `harness` | `auto` · `claude` · `codex` | Chooses a profile. `auto` detects from the available delegation API. |
+| `roles.orchestrator` / `builder` / `scout` | `auto` or model alias/ID | Explicit role override. It wins over the profile only when the running harness advertises it. |
+| `harnessProfiles` | per-harness role mappings | Fallback policy for Claude and Codex. Update it when your runtime offers a different model set. |
 | `workflows.<name>.enabled` | bool | Whether the router may select this workflow. |
 | `workflows.<name>.maxParallel` | int | Cap on parallel fan-out legs for this workflow (guards over-fan-out — multi-agent fan-out costs ~15× a single pass). |
 | `escalation.scoutToBuilder` | bool | Re-run a thin/low-confidence scout leg at the builder tier before giving up (cascade). |
 | `threshold.maxParallelAuto` / `maxFilesAuto` | int | Limits used when `autonomy=threshold`. |
 | `doctrine` | `off` · `standard` · `strict` | How forcefully the `SessionStart` hook injects the doctrine (`off` disables it). |
-| `alwaysPassModelExplicitly` | bool | Tell the orchestrator to pass `model` on every Agent call — works around the frontmatter model bug ([anthropics/claude-code#44385](https://github.com/anthropics/claude-code/issues/44385)). |
+| `alwaysPassModelExplicitly` | bool | Tell the orchestrator to pass a validated model override whenever its harness supports explicit model selection. |
 
-Manage all of this conversationally with `/orchestrate-workflows` ("set orchestrator to
-fable", "enable optimize", "show my config").
+Manage all of this conversationally with `/orchestrate-workflows` ("set the Codex builder
+role", "enable optimize", "show my config").
+
+## Harness adapters
+
+Claude Code keeps the plugin hook and Markdown agents in `agents/`. Codex uses the native
+TOML role files in [`codex/agents`](codex/agents), which can be copied to `.codex/agents/`
+or `~/.codex/agents/`. The router detects the harness from its agent-spawning capability,
+not an environment variable that another harness could happen to set.
+
+The Codex default is intentionally cost-shaped: Sol orchestrates, Terra builds and verifies,
+and Luna handles bounded scouting and web research. “Use Astra to orchestrate” is a
+top-tier-only override, analogous to Claude's Fable override; it leaves Terra and Luna in
+place.
 
 ## Why pass `model` explicitly?
 
-The subagent frontmatter `model:` field can be ignored, so subagents may silently inherit
-the orchestrator. The reliable lever is the **per-invocation `model` parameter**, which takes
-precedence over frontmatter — the doctrine instructs the orchestrator to always set it. We
-deliberately **do not** use `CLAUDE_CODE_SUBAGENT_MODEL` — it would force every subagent to a
-single tier and defeat mixed delegation.
+On Claude, the subagent frontmatter `model:` field can be ignored, so the per-invocation
+model parameter is the reliable lever. On Codex, an explicit spawn model takes precedence
+over the configured default. In either harness, pass it only after checking its availability;
+otherwise inherit the default rather than failing the spawn with an invalid name.
 
 ## How it fits together
 
 ```
-You (orchestrator · Opus/Fable): classify · prelude · judge · synthesize
+You (orchestrator · active harness model): classify · prelude · judge · synthesize
    │
    ├── Step 1  classify on the oracle ─► one of six workflows
    │
    ├── Prelude   ─► the shared artifact (contract / repro / rubric / baseline / context pack)
    │
-   ├──► scout      (Haiku)   explorer · researcher   search / map / research
-   ├──► builder    (Sonnet)  implementer             scoped change against the shared contract
-   ├──► reviewer   (Sonnet)  reviewer                single-lens adversarial review
+   ├──► scout      (profile) explorer · researcher   search / map / research
+   ├──► builder    (profile) implementer             scoped change against the shared contract
+   ├──► reviewer   (profile) reviewer                single-lens adversarial review
    │
-   └── Converge  ─► verifier (Sonnet) checks · orchestrator judges & synthesizes
+   └── Converge  ─► verifier (profile) checks · orchestrator judges & synthesizes
 ```

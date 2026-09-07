@@ -1,6 +1,6 @@
 ---
 name: orchestrate-workflows
-description: Companion to /orchestrate — run a specific workflow directly (bypassing the router's classification), inspect or edit the layered config, or dry-run "what would the router pick" for a prompt. Use when the user says "run the review workflow", "force implement", "show my orchestrate config", "set orchestrator to fable", "edit the orchestrate config", or "what workflow would this be".
+description: Companion to /orchestrate — run a specific workflow directly (bypassing the router's classification), inspect or edit the layered config, or dry-run "what would the router pick" for a prompt. Use when the user says "run the review workflow", "force implement", "show my orchestrate config", "use Astra to orchestrate", "edit the orchestrate config", or "what workflow would this be".
 ---
 
 # orchestrate-workflows — run + manage
@@ -13,12 +13,18 @@ from the request, then do that one thing.
 
 Layered, deep-merged, first present wins **per key**:
 
-1. `$CLAUDE_PROJECT_DIR/.claude/orchestrate.config.json` (repo)
-2. `~/.claude/orchestrate.config.json` (user)
-3. `${CLAUDE_PLUGIN_ROOT}/orchestrate.config.json` (shipped default)
+1. The active harness's project-level config location (for example `.claude/` or `.codex/`)
+2. The active harness's user-level config location
+3. The installed package's `orchestrate.config.json` (shipped default)
 
-The schema is `${CLAUDE_PLUGIN_ROOT}/orchestrate.config.schema.json`. The workflow recipes
-live in `${CLAUDE_PLUGIN_ROOT}/skills/orchestrate/workflows/<name>.md`.
+The schema is this package's `orchestrate.config.schema.json`. The workflow recipes live in
+`skills/orchestrate/workflows/<name>.md`.
+
+Resolve the harness before showing or editing role choices: explicit `harness` wins; else
+use the available delegation API (`Agent`/Task = Claude; `spawn_agent` = Codex). Resolve a
+role from an explicit non-`auto` value, otherwise from `harnessProfiles.<harness>`. A model
+override is valid only if it is advertised by that running harness; omit invalid overrides
+and inherit the harness default.
 
 ## Mode A — Run a workflow directly
 
@@ -28,14 +34,14 @@ diff", "force debug"). This **skips classification** — the user has already ch
 1. Load the merged config.
 2. If the named workflow is `enabled: false`, say so and confirm the user wants it anyway
    (a direct request overrides the enabled flag — honor it, just flag it once).
-3. Read `${CLAUDE_PLUGIN_ROOT}/skills/orchestrate/workflows/<name>.md` and run it exactly
+3. Read this package's `skills/orchestrate/workflows/<name>.md` and run it exactly
    as the router would (Steps 3–5 of the `orchestrate` skill: announce per `autonomy`, fan
-   out with 4-part briefs capped at `maxParallel`, converge). Honor any natural-language
-   role override in the request ("...with fable orchestrating").
+   out with 4-part briefs capped at `maxParallel`, converge). Honor a natural-language role
+   override only when the active harness advertises that model.
 
 ## Mode B — Manage the config
 
-Use for "show my config", "set orchestrator to fable", "bump implement's maxParallel",
+Use for "show my config", "use Astra to orchestrate", "bump implement's maxParallel",
 "enable optimize", "put this at the user level", "scaffold a repo config".
 
 - **Show** — print the three layers and the effective merged result, so the user can see
@@ -53,8 +59,8 @@ Common edits and where they land:
 
 | Ask | Key |
 |-----|-----|
-| "use fable to orchestrate everywhere" | `roles.orchestrator: "fable"` (user layer) |
-| "sonnet should build" / retier a role | `roles.{builder,scout}` |
+| "use a model to orchestrate everywhere" | `roles.orchestrator: "<supported model>"` (user layer) |
+| "retier a role" | `roles.{builder,scout}` or `harnessProfiles.<harness>.roles.*` |
 | "enable/disable a workflow" | `workflows.<name>.enabled` |
 | "allow more parallel agents" | `workflows.<name>.maxParallel` |
 | "just run it, don't ask" | `autonomy: "auto"` |
@@ -71,7 +77,7 @@ Use for "what workflow would this be", "which tier handles X", "explain the rout
    it was close.
 3. Sketch the plan the recipe would produce: the **prelude** (shared unblock), the
    **fan-out** (N legs × which role/model), and the **convergence** — without spawning agents.
-4. Note the effective roles (incl. any fable override) and the `maxParallel` cap that would
+4. Note the effective roles (including any top-tier model override) and the `maxParallel` cap that would
    apply.
 
 ## Notes

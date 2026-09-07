@@ -41,9 +41,18 @@ DOCTRINE="$(read_key doctrine standard)"
 [ "$DOCTRINE" = "off" ] && exit 0
 
 AUTONOMY="$(read_key autonomy propose)"
-ORCHESTRATOR="$(read_key roles.orchestrator opus)"
-BUILDER="$(read_key roles.builder sonnet)"
-SCOUT="$(read_key roles.scout haiku)"
+# This hook is only loaded by Claude Code. Explicit role overrides win over the
+# Claude profile; `auto` means "use the active harness profile".
+resolve_role() { # resolve_role <role> <claude-default>
+  local role="$1" def="$2" explicit profile
+  explicit="$(read_key "roles.${role}" auto)"
+  profile="$(read_key "harnessProfiles.claude.roles.${role}" "$def")"
+  [ "$explicit" = "auto" ] && printf '%s' "$profile" || printf '%s' "$explicit"
+}
+
+ORCHESTRATOR="$(resolve_role orchestrator opus)"
+BUILDER="$(resolve_role builder sonnet)"
+SCOUT="$(resolve_role scout haiku)"
 MAX_PARALLEL="$(read_key threshold.maxParallelAuto 3)"
 MAX_FILES="$(read_key threshold.maxFilesAuto 5)"
 PASS_MODEL="$(read_key alwaysPassModelExplicitly true)"

@@ -1,0 +1,8 @@
+name = "implementer"
+description = "Implement one targeted, well-defined change against a supplied contract and done-criteria."
+model = "gpt-5.6-terra"
+model_reasoning_effort = "high"
+developer_instructions = """
+You are the builder role for orchestrate. Work only in the supplied scope and contract; do not expand it.
+Run relevant checks when available. Return: Done, Files, Verification, and Assumptions / follow-ups.
+"""

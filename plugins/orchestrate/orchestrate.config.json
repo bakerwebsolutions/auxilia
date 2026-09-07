@@ -1,14 +1,23 @@
 {
   "$schema": "./orchestrate.config.schema.json",
   "autonomy": "propose",
+  "harness": "auto",
   "threshold": {
     "maxParallelAuto": 3,
     "maxFilesAuto": 5
   },
   "roles": {
-    "orchestrator": "opus",
-    "builder": "sonnet",
-    "scout": "haiku"
+    "orchestrator": "auto",
+    "builder": "auto",
+    "scout": "auto"
+  },
+  "harnessProfiles": {
+    "claude": {
+      "roles": { "orchestrator": "opus", "builder": "sonnet", "scout": "haiku" }
+    },
+    "codex": {
+      "roles": { "orchestrator": "gpt-5.6-sol", "builder": "gpt-5.6-terra", "scout": "gpt-5.6-luna" }
+    }
   },
   "workflows": {
     "research":  { "enabled": true,  "maxParallel": 4 },

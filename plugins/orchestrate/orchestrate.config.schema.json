@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "orchestrate plugin config",
-  "description": "Tuning knobs for the orchestrate router. The SessionStart hook, the /orchestrate router skill, and the /orchestrate-workflows companion all read this file so behavior stays consistent across entry points. Config is layered (deep-merged, first present wins per key): repo .claude/ overrides user ~/.claude/ overrides the shipped default.",
+  "description": "Tuning knobs for the orchestrate router. The active harness resolves its profile first; explicit role values then override it. Config is layered (deep-merged, first present wins per key).",
   "type": "object",
   "additionalProperties": false,
   "properties": {
@@ -10,6 +10,11 @@
       "description": "How autonomous the orchestrator is once it has classified the task and built a plan. propose = announce the workflow + plan and wait for OK (default); auto = run immediately; threshold = auto only when under the threshold limits, otherwise propose.",
       "enum": ["propose", "auto", "threshold"],
       "default": "propose"
+    },
+    "harness": {
+      "description": "auto selects from the running agent runtime's delegation capability; claude and codex force one profile. Use a forced profile only for a known harness-specific installation.",
+      "enum": ["auto", "claude", "codex"],
+      "default": "auto"
     },
     "threshold": {
       "description": "Limits used when autonomy=threshold. At or below these, fan out automatically; above either, propose first.",
@@ -21,13 +26,22 @@
       }
     },
     "roles": {
-      "description": "Which model plays each role. Aliases (opus|sonnet|haiku|fable) or a full model ID. The orchestrator is the top tier — the running session and any peer instance it spawns for adversarial judging/verdicts. Swapping orchestrator to fable makes fable fully replace opus everywhere the top tier is used. builder implements and writes prose; scout does read-only research/search.",
+      "description": "Explicit model overrides for the three roles. auto takes the role from the active harness profile. Use only model IDs or aliases supported by the running harness.",
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "orchestrator": { "type": "string", "default": "opus" },
-        "builder": { "type": "string", "default": "sonnet" },
-        "scout": { "type": "string", "default": "haiku" }
+        "orchestrator": { "type": "string", "default": "auto" },
+        "builder": { "type": "string", "default": "auto" },
+        "scout": { "type": "string", "default": "auto" }
+      }
+    },
+    "harnessProfiles": {
+      "description": "Per-harness fallback models. These are defaults, not a capability registry: when a runtime exposes a different supported-model list, update this profile or leave roles as auto to inherit the runtime default.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "claude": { "$ref": "#/$defs/harnessProfile" },
+        "codex": { "$ref": "#/$defs/harnessProfile" }
       }
     },
     "workflows": {
@@ -73,6 +87,21 @@
           "type": "integer",
           "minimum": 1,
           "default": 4
+        }
+      }
+    },
+    "harnessProfile": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "roles": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "orchestrator": { "type": "string" },
+            "builder": { "type": "string" },
+            "scout": { "type": "string" }
+          }
         }
       }
     }

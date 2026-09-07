@@ -1,6 +1,6 @@
 ---
 name: orchestrate
-description: Route a task to a pre-curated, model-tiered workflow and run it. Use when the user says "orchestrate", "decompose", "delegate this", "parallelize", "fan out", or hands you a multi-part task. Detects the task type (research · design · implement · debug · review · optimize), then runs that workflow's recipe — a shared sequential prelude, a parallel fan-out to cheaper tiers, and a convergence step. You (the orchestrator) stay on reasoning and synthesis; Sonnet builds, Haiku scouts.
+description: Route a task to a pre-curated, role-tiered workflow and run it. Use when the user says "orchestrate", "decompose", "delegate this", "parallelize", "fan out", or hands you a multi-part task. Detects the task type (research · design · implement · debug · review · optimize), then runs that workflow's recipe — a shared sequential prelude, a parallel fan-out, and a convergence step. Resolve models from the active harness before delegating.
 ---
 
 # orchestrate — the router
@@ -18,14 +18,33 @@ specialized followup. Cheap, deterministic, debuggable. Keep it that way.
 Deep-merge these (first present wins **per key**), so the user sets global defaults and a
 repo overrides specifics:
 
-1. `$CLAUDE_PROJECT_DIR/.claude/orchestrate.config.json` (repo)
-2. `~/.claude/orchestrate.config.json` (user)
-3. `${CLAUDE_PLUGIN_ROOT}/orchestrate.config.json` (shipped default)
+1. The active harness's project-level config location (for example `.claude/` or `.codex/`)
+2. The active harness's user-level config location
+3. The installed package's `orchestrate.config.json` (shipped default)
 
 Keys you act on: `roles.{orchestrator,builder,scout}`, `autonomy`, `threshold.*`,
 `workflows.<name>.{enabled,maxParallel}`, `escalation.scoutToBuilder`,
-`alwaysPassModelExplicitly`. Defaults if no file: roles `opus/sonnet/haiku`,
+`harness`, `harnessProfiles`, and `alwaysPassModelExplicitly`. Defaults if no file: detect
+the harness from its available delegation tool, use its profile, and inherit a role when no
+supported model can be established. Never pass a Claude alias to Codex or a Codex model ID
+to Claude.
 `autonomy=propose`, all workflows except `optimize` enabled, pass model explicitly.
+
+## Resolve harness and roles before delegation
+
+Set the harness in this precedence order:
+
+1. An explicit `harness` config value other than `auto`.
+2. The available delegation capability: Claude's `Agent`/Task interface means `claude`;
+   Codex's `spawn_agent`/collaboration interface means `codex`.
+3. If still uncertain, do not guess a model. Omit the model override and use the harness
+   default (or stay single-agent if delegation is unavailable).
+
+Resolve each role by taking an explicit non-`auto` `roles.<role>` value, otherwise the
+selected `harnessProfiles.<harness>.roles.<role>` value. Before passing it, verify the value
+is in the runtime's advertised model choices. If it is absent, omit the model parameter;
+the harness default is safer than a stale profile. The active primary model is context, not
+a reliable model catalog.
 
 ## The roles
 
@@ -33,16 +52,16 @@ Everything routes to **four roles**, not four fixed model names. The config maps
 
 | Role | Does | Default | Read/write |
 |------|------|---------|-----------|
-| **orchestrator** | classify · run the recipe · reason on the prelude · synthesize · adversarially judge/verify | `opus` | you (this session) + peer instances you spawn for judging |
-| **builder** | implement code · write prose · run tests to verify | `sonnet` | writes |
-| **scout** | search · locate · map · external research | `haiku` | read-only |
+| **orchestrator** | classify · run the recipe · reason on the prelude · synthesize · adversarially judge/verify | harness profile | you (this session) + peer instances you spawn for judging |
+| **builder** | implement code · write prose · run tests to verify | harness profile | writes |
+| **scout** | search · locate · map · external research | harness profile | read-only |
 
-**Swapping the orchestrator = swapping the whole top tier.** If the user says (in natural
-language) "use fable to orchestrate", "orchestrate this with fable", or similar, set
-`roles.orchestrator = fable` **for this run only**. Fable then fully replaces Opus: it
-coordinates *and* does the deep reasoning and the adversarial judging. Opus is simply not
-used. Builder stays Sonnet, scout stays Haiku. A natural-language override always beats the
-config file for that one run.
+**Swapping the orchestrator = swapping the whole top tier.** A natural-language model
+override applies only when that model is advertised by the active harness; it always beats
+the config for that run. Keep the other roles unchanged unless the user explicitly retieres
+them. In Codex, “use Astra to orchestrate” means
+`roles.orchestrator = gpt-6-astra` for that run only; builders and scouts retain their
+resolved tiers. In Claude, the equivalent established override is Fable.
 
 ## The shared 3-stage skeleton
 
@@ -87,7 +106,7 @@ route to the closest enabled one (or ask). The user can force a workflow in natu
 
 ## Step 2 — Run the workflow recipe
 
-Read `${CLAUDE_PLUGIN_ROOT}/skills/orchestrate/workflows/<workflow>.md` and follow it. Each
+Read this package's `skills/orchestrate/workflows/<workflow>.md` and follow it. Each
 recipe specifies its prelude, its fan-out (which role, how many, what each does), and its
 convergence. It also lists the flavors that ride on it and which stages they toggle.
 
@@ -115,9 +134,9 @@ Boundaries:    what to leave alone; when it's done
 
 - Launch all **parallel** legs **in one message** (multiple Agent calls) so they run concurrently.
 - **Cap** parallel legs at `workflows.<name>.maxParallel`. Prefer fewer well-scoped agents.
-- **Pass `model` explicitly** on every Agent call when `alwaysPassModelExplicitly` is true
-  (e.g. `model: "haiku"`) — subagent frontmatter `model:` is unreliable
-  (anthropics/claude-code#44385).
+- Pass an explicit model only when `alwaysPassModelExplicitly` is true **and** the resolved
+  model is advertised by the active harness. Use that harness's spawn API and parameter
+  spelling; otherwise omit it and inherit the harness default.
 - **Cascade** (`escalation.scoutToBuilder`): if a scout leg returns thin/low-confidence
   output, re-run that one leg at the builder tier before giving up.
 
