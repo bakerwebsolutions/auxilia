@@ -71,14 +71,21 @@ The agents double as **agent-team teammate types** since they carry their own `t
 
 ## Install
 
+Claude Code:
+
 ```
 /plugin marketplace add bakerwebsolutions/auxilia
 /plugin install orchestrate@auxilia
 ```
 
-Restart Claude Code after installation so its `SessionStart` hook and agents load. For Codex,
-install the router skill through its normal skill mechanism and copy `codex/agents/*.toml`
-into `.codex/agents/` (or `~/.codex/agents/`); see [`codex/README.md`](codex/README.md).
+Codex: add this repository's `.codex-plugin/marketplace.json` to the Codex
+plugin marketplace, then install `orchestrate`. The package contains the same
+canonical skills and the native Codex agent definitions under `codex/agents/`.
+
+Restart Claude Code after installation so its `SessionStart` hook and agents load. Codex
+loads the plugin's skills from the package and its native agent definitions from
+`codex/agents/`; see [`codex/README.md`](codex/README.md) for manual installation when a
+marketplace is unavailable.
 
 ## Configuration
 

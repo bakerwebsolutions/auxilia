@@ -1,39 +1,19 @@
 {
-  "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
+  "$schema": "https://developers.openai.com/codex/schemas/marketplace.json",
   "name": "auxilia",
-  "version": "1.0.0",
-  "description": "Reusable Claude Code skills, packaged as installable plugins.",
-  "owner": {
-    "name": "Dallan Baker",
-    "email": "dallan@bakerwebsolutions.com"
-  },
-  "metadata": {
-    "pluginRoot": "./plugins"
-  },
+  "description": "Reusable plugins for Codex.",
   "plugins": [
     {
       "name": "research-spike",
       "description": "Run a reusable external research spike: tighten a topic into parallel workstreams, fan out web-research agents, synthesize findings, and save durable artifacts under docs/research-spike/.",
       "version": "1.0.0",
-      "author": {
-        "name": "Dallan Baker",
-        "email": "dallan@bakerwebsolutions.com"
-      },
-      "source": "./plugins/research-spike",
-      "category": "research",
-      "homepage": "https://github.com/bakerwebsolutions/auxilia/tree/master/plugins/research-spike"
+      "source": "./plugins/research-spike"
     },
     {
       "name": "orchestrate",
       "description": "A task router for Claude Code: detect the task type (research · design · implement · debug · review · optimize) and run a pre-curated, model-tiered workflow — a shared sequential prelude that unblocks a parallel fan-out to cheaper tiers (Sonnet builds, Haiku scouts), then a convergence. Opus orchestrates by default; swap to Fable in natural language. Ships the /orchestrate router, an /orchestrate-workflows companion (run/manage/explain), pre-tiered subagents, a SessionStart doctrine, and layered repo+user JSON config.",
       "version": "2.0.0",
-      "author": {
-        "name": "Dallan Baker",
-        "email": "dallan@bakerwebsolutions.com"
-      },
-      "source": "./plugins/orchestrate",
-      "category": "workflow",
-      "homepage": "https://github.com/bakerwebsolutions/auxilia/tree/master/plugins/orchestrate"
+      "source": "./plugins/orchestrate"
     }
   ]
 }

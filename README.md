@@ -20,6 +20,9 @@ In Claude Code, add this repo as a marketplace, then install a plugin from it:
 /plugin install research-spike@auxilia
 ```
 
+Codex users can add the repository’s `.codex-plugin/marketplace.json` catalog
+and install either plugin from the same canonical directories.
+
 `bakerwebsolutions/auxilia` is the GitHub `owner/repo`; `auxilia` (after the `@`)
 is the marketplace name. Browse and manage everything interactively with:
 
@@ -45,6 +48,17 @@ The version lives in two places that must stay in sync:
 
 Bump both (and the version shown in the table above and the plugin's README) when
 you change a plugin. Users only receive updates when the version changes.
+
+The same identity metadata is repeated in each host's native adapter and
+catalog. Run the lightweight consistency check before publishing changes:
+
+```
+python3 scripts/validate-plugin-metadata.py
+```
+
+It checks every Claude manifest, any matching Codex manifest, and either
+supported Codex catalog location. Host-specific fields are intentionally left
+to each platform.
 
 ## Repository layout
 

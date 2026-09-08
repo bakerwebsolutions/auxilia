@@ -1,5 +1,15 @@
 # Codex adapter
 
+The recommended installation is through the repository Codex marketplace at
+`.codex-plugin/marketplace.json`. Install `orchestrate` there so Codex loads
+the shared skills and the native agent definitions as one package.
+
+The package root is `plugins/orchestrate`; its Codex metadata lives in
+`.codex-plugin/plugin.json`. The Claude metadata in `.claude-plugin/` is kept
+separate because each host has its own package contract.
+
+## Manual agent installation
+
 Copy `agents/*.toml` into the consuming repository's `.codex/agents/` directory (or into
 `~/.codex/agents/` for a user-wide installation). Codex loads those as custom subagent
 types; they inherit the parent session's sandbox and tools unless their TOML says otherwise.

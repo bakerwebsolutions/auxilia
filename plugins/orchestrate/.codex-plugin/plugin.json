@@ -1,0 +1,13 @@
+{
+  "name": "orchestrate",
+  "description": "A task router for Claude Code: detect the task type (research · design · implement · debug · review · optimize) and run a pre-curated, model-tiered workflow — a shared sequential prelude that unblocks a parallel fan-out to cheaper tiers (Sonnet builds, Haiku scouts), then a convergence. Opus orchestrates by default; swap to Fable in natural language. Ships the /orchestrate router, an /orchestrate-workflows companion (run/manage/explain), pre-tiered subagents, a SessionStart doctrine, and layered repo+user JSON config.",
+  "version": "2.0.0",
+  "author": {
+    "name": "Dallan Baker",
+    "email": "dallan@bakerwebsolutions.com"
+  },
+  "homepage": "https://github.com/bakerwebsolutions/auxilia/tree/master/plugins/orchestrate",
+  "license": "MIT",
+  "skills": "./skills/",
+  "agents": "./codex/agents/"
+}

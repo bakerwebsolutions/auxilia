@@ -14,10 +14,25 @@ onboarding/retention studies, or market-gap exploration.
 
 ## Install
 
+### Claude Code
+
 ```
 /plugin marketplace add bakerwebsolutions/auxilia
 /plugin install research-spike@auxilia
 ```
+
+### Codex
+
+Add the repository marketplace with the Codex CLI, then open the Plugins
+Directory in the ChatGPT desktop app and install `research-spike` from the
+`auxilia` marketplace:
+
+```
+codex plugin marketplace add bakerwebsolutions/auxilia
+```
+
+The plugin uses the same `skills/research-spike/SKILL.md` on both hosts; only
+the host-specific manifests and marketplace metadata differ.
 
 ## Use
 
