@@ -1,14 +1,34 @@
 {
   "$schema": "./orchestrate.config.schema.json",
   "autonomy": "propose",
+  "harness": "auto",
   "threshold": {
     "maxParallelAuto": 3,
     "maxFilesAuto": 5
   },
-  "tiers": {
-    "explore": "haiku",
-    "implement": "sonnet",
-    "verify": "sonnet"
+  "roles": {
+    "orchestrator": "auto",
+    "builder": "auto",
+    "scout": "auto"
+  },
+  "harnessProfiles": {
+    "claude": {
+      "roles": { "orchestrator": "opus", "builder": "sonnet", "scout": "haiku" }
+    },
+    "codex": {
+      "roles": { "orchestrator": "gpt-5.6-sol", "builder": "gpt-5.6-terra", "scout": "gpt-5.6-luna" }
+    }
+  },
+  "workflows": {
+    "research":  { "enabled": true,  "maxParallel": 4 },
+    "design":    { "enabled": true,  "maxParallel": 3 },
+    "implement": { "enabled": true,  "maxParallel": 3 },
+    "debug":     { "enabled": true,  "maxParallel": 4 },
+    "review":    { "enabled": true,  "maxParallel": 4 },
+    "optimize":  { "enabled": false, "maxParallel": 3 }
+  },
+  "escalation": {
+    "scoutToBuilder": true
   },
   "doctrine": "standard",
   "alwaysPassModelExplicitly": true

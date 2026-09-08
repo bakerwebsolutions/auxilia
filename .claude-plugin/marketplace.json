@@ -25,8 +25,8 @@
     },
     {
       "name": "orchestrate",
-      "description": "Keep Opus as the orchestrator and delegate downward: implementation to Sonnet, exploration to Haiku. Ships a SessionStart delegation doctrine, an /orchestrate decompose-and-delegate skill, and pre-tiered explorer/implementer/verifier subagents. Config-driven autonomy (propose | auto | threshold).",
-      "version": "1.0.0",
+      "description": "A task router: detect the task type (research · design · implement · debug · review · optimize) and run a pre-curated, model-tiered workflow — a shared prelude that unblocks a parallel fan-out (Sonnet builds, Haiku scouts), then a convergence. Opus orchestrates by default, swappable to Fable. Ships the /orchestrate router, an /orchestrate-workflows companion, pre-tiered subagents, a SessionStart doctrine, and layered repo+user config.",
+      "version": "2.0.0",
       "author": {
         "name": "Dallan Baker",
         "email": "dallan@bakerwebsolutions.com"

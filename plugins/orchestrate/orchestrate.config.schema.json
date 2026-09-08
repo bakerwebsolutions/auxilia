@@ -1,15 +1,20 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "orchestrate plugin config",
-  "description": "Tuning knobs for the orchestrate plugin. The SessionStart hook and the /orchestrate skill both read this file so behavior stays consistent across entry points.",
+  "description": "Tuning knobs for the orchestrate router. The active harness resolves its profile first; explicit role values then override it. Config is layered (deep-merged, first present wins per key).",
   "type": "object",
   "additionalProperties": false,
   "properties": {
     "$schema": { "type": "string" },
     "autonomy": {
-      "description": "How autonomous Opus is once it has a delegation plan. propose = show the plan and wait for OK; auto = fan out immediately; threshold = auto when under the threshold limits, otherwise propose.",
+      "description": "How autonomous the orchestrator is once it has classified the task and built a plan. propose = announce the workflow + plan and wait for OK (default); auto = run immediately; threshold = auto only when under the threshold limits, otherwise propose.",
       "enum": ["propose", "auto", "threshold"],
       "default": "propose"
+    },
+    "harness": {
+      "description": "auto selects from the running agent runtime's delegation capability; claude and codex force one profile. Use a forced profile only for a known harness-specific installation.",
+      "enum": ["auto", "claude", "codex"],
+      "default": "auto"
     },
     "threshold": {
       "description": "Limits used when autonomy=threshold. At or below these, fan out automatically; above either, propose first.",
@@ -20,14 +25,44 @@
         "maxFilesAuto": { "type": "integer", "minimum": 1, "default": 5 }
       }
     },
-    "tiers": {
-      "description": "Which model each kind of delegated work runs on. Aliases (opus|sonnet|haiku|fable) or a full model ID.",
+    "roles": {
+      "description": "Explicit model overrides for the three roles. auto takes the role from the active harness profile. Use only model IDs or aliases supported by the running harness.",
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "explore": { "type": "string", "default": "haiku" },
-        "implement": { "type": "string", "default": "sonnet" },
-        "verify": { "type": "string", "default": "sonnet" }
+        "orchestrator": { "type": "string", "default": "auto" },
+        "builder": { "type": "string", "default": "auto" },
+        "scout": { "type": "string", "default": "auto" }
+      }
+    },
+    "harnessProfiles": {
+      "description": "Per-harness fallback models. These are defaults, not a capability registry: when a runtime exposes a different supported-model list, update this profile or leave roles as auto to inherit the runtime default.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "claude": { "$ref": "#/$defs/harnessProfile" },
+        "codex": { "$ref": "#/$defs/harnessProfile" }
+      }
+    },
+    "workflows": {
+      "description": "Which pre-curated workflows the router may select, and per-workflow fan-out caps. A disabled workflow is never routed to; the router falls back to the closest enabled workflow or asks.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "research":  { "$ref": "#/$defs/workflow" },
+        "design":    { "$ref": "#/$defs/workflow" },
+        "implement": { "$ref": "#/$defs/workflow" },
+        "debug":     { "$ref": "#/$defs/workflow" },
+        "review":    { "$ref": "#/$defs/workflow" },
+        "optimize":  { "$ref": "#/$defs/workflow" }
+      }
+    },
+    "escalation": {
+      "description": "Cascade behavior. When a scout (Haiku) returns thin or low-confidence output on a leg, re-run that one leg at the builder tier before giving up.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "scoutToBuilder": { "type": "boolean", "default": true }
       }
     },
     "doctrine": {
@@ -36,9 +71,39 @@
       "default": "standard"
     },
     "alwaysPassModelExplicitly": {
-      "description": "Instruct Opus to pass the model parameter explicitly on every Agent call, working around the frontmatter model bug (anthropics/claude-code#44385).",
+      "description": "Instruct the orchestrator to pass the model parameter explicitly on every Agent call, working around the frontmatter model bug (anthropics/claude-code#44385).",
       "type": "boolean",
       "default": true
+    }
+  },
+  "$defs": {
+    "workflow": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean", "default": true },
+        "maxParallel": {
+          "description": "Cap on parallel fan-out agents for this workflow. Guards against the over-fan-out failure mode (Anthropic multi-agent research: fan-out is ~15x the tokens of a single pass).",
+          "type": "integer",
+          "minimum": 1,
+          "default": 4
+        }
+      }
+    },
+    "harnessProfile": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "roles": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "orchestrator": { "type": "string" },
+            "builder": { "type": "string" },
+            "scout": { "type": "string" }
+          }
+        }
+      }
     }
   }
 }
