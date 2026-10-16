@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # orchestrate · SessionStart hook
 # Reads orchestrate.config.json and injects the routing/delegation doctrine into the
-# session as additionalContext. Config resolution (first match wins for the doctrine text;
-# the /orchestrate skill itself deep-merges all layers):
+# session as additionalContext. Config is layered and deep-merged, first present wins
+# PER KEY (not per file) — a repo layer that sets only `doctrine` still falls through to
+# the user layer for every other key, and only from there to the shipped default:
 #   1. $CLAUDE_PROJECT_DIR/.claude/orchestrate.config.json   (repo override)
 #   2. ./orchestrate.config.json                             (cwd override)
 #   3. $HOME/.claude/orchestrate.config.json                 (user override)
@@ -12,29 +13,72 @@ set -euo pipefail
 PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$PWD}"
 
-CONFIG=""
+CONFIG_LAYERS=()
 for candidate in \
   "$PROJECT_DIR/.claude/orchestrate.config.json" \
   "$PWD/orchestrate.config.json" \
   "$HOME/.claude/orchestrate.config.json" \
   "$PLUGIN_ROOT/orchestrate.config.json"; do
-  if [ -f "$candidate" ]; then CONFIG="$candidate"; break; fi
+  [ -f "$candidate" ] && CONFIG_LAYERS+=("$candidate")
 done
 
-# --- read a scalar key; jq if present, else a tolerant grep/sed fallback -------
+# Sentinel for "this layer doesn't define this key" — distinct from any real value
+# (including the empty string, which counts as defined) so a present-but-empty or
+# present-but-false value is never mistaken for absence.
+_UNDEF="__orchestrate_undefined__"
+
+# --- read a key by walking layers in precedence order, first DEFINING layer wins ---
+# Three tiers, best available first. A key counts as defined only if it is present AND
+# non-null, so a layer cannot "define" a key as null — same as leaving it out. `false`
+# and the empty string ARE defined; only absence falls through to the next layer.
+#   1. jq       — exact dotted-path resolution.
+#   2. python3  — exact, and already a dependency of this script (see the emit at the
+#                 bottom), so this tier covers virtually every machine jq doesn't.
+#   3. grep/sed — last resort, matches on the LEAF key name only, so e.g. roles.builder
+#                 and harnessProfiles.claude.roles.builder collide. resolve_role() below
+#                 compensates; see the note there.
 read_key() { # read_key <dotted.path> <default>
-  local path="$1" def="$2" val=""
-  if [ -n "$CONFIG" ] && command -v jq >/dev/null 2>&1; then
-    val="$(jq -r --arg d "$def" ".${path} // \$d" "$CONFIG" 2>/dev/null || echo "$def")"
-  elif [ -n "$CONFIG" ]; then
-    local leaf="${path##*.}"
-    val="$(grep -oE "\"${leaf}\"[[:space:]]*:[[:space:]]*(\"[^\"]*\"|[0-9]+|true|false)" "$CONFIG" 2>/dev/null \
-            | head -n1 | sed -E 's/.*:[[:space:]]*//; s/^"//; s/"$//')"
-    [ -z "$val" ] && val="$def"
+  local path="$1" def="$2" layer val keys_json leaf
+  if command -v jq >/dev/null 2>&1; then
+    keys_json="$(printf '%s' "$path" | jq -R 'split(".")')"
+    for layer in ${CONFIG_LAYERS[@]+"${CONFIG_LAYERS[@]}"}; do
+      val="$(jq -r --argjson keys "$keys_json" --arg u "$_UNDEF" \
+              'getpath($keys) as $v | if $v == null then $u else ($v | tostring) end' \
+              "$layer" 2>/dev/null)" || val="$_UNDEF"
+      [ "$val" != "$_UNDEF" ] && { printf '%s' "$val"; return; }
+    done
+  elif command -v python3 >/dev/null 2>&1; then
+    for layer in ${CONFIG_LAYERS[@]+"${CONFIG_LAYERS[@]}"}; do
+      val="$(python3 -c '
+import json, sys
+src, path, undef = sys.argv[1], sys.argv[2], sys.argv[3]
+try:
+    node = json.load(open(src))
+except Exception:
+    print(undef); raise SystemExit
+for seg in path.split("."):
+    if isinstance(node, dict) and seg in node:
+        node = node[seg]
+    else:
+        print(undef); raise SystemExit
+if node is None:
+    print(undef)
+elif isinstance(node, bool):
+    print("true" if node else "false")
+else:
+    print(node)
+' "$layer" "$path" "$_UNDEF" 2>/dev/null)" || val="$_UNDEF"
+      [ "$val" != "$_UNDEF" ] && { printf '%s' "$val"; return; }
+    done
   else
-    val="$def"
+    leaf="${path##*.}"
+    for layer in ${CONFIG_LAYERS[@]+"${CONFIG_LAYERS[@]}"}; do
+      val="$(grep -oE "\"${leaf}\"[[:space:]]*:[[:space:]]*(\"[^\"]*\"|-?[0-9]+(\.[0-9]+)?|true|false|null)" "$layer" 2>/dev/null \
+              | head -n1 | sed -E 's/.*:[[:space:]]*//; s/^"//; s/"$//')"
+      [ -n "$val" ] && [ "$val" != "null" ] && { printf '%s' "$val"; return; }
+    done
   fi
-  printf '%s' "$val"
+  printf '%s' "$def"
 }
 
 DOCTRINE="$(read_key doctrine standard)"
@@ -47,6 +91,9 @@ resolve_role() { # resolve_role <role> <claude-default>
   local role="$1" def="$2" explicit profile
   explicit="$(read_key "roles.${role}" auto)"
   profile="$(read_key "harnessProfiles.claude.roles.${role}" "$def")"
+  # `auto` is a sentinel, never a model name. On the grep/sed tier both lookups above can
+  # collide on the same leaf key and return it, so keep it out of the doctrine text.
+  [ "$profile" = "auto" ] && profile="$def"
   [ "$explicit" = "auto" ] && printf '%s' "$profile" || printf '%s' "$explicit"
 }
 
