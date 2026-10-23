@@ -29,7 +29,8 @@
   },
   "worktrees": {
     "mode": "auto",
-    "cleanup": "on-success"
+    "cleanup": "on-success",
+    "link": []
   },
   "escalation": {
     "scoutToBuilder": true
