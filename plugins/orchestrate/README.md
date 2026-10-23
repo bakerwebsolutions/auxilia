@@ -37,7 +37,7 @@ never share a checkout. The lifecycle goes through one bundled script,
 [`skills/orchestrate/scripts/worktree.sh`](skills/orchestrate/scripts/worktree.sh):
 
 ```
-worktree.sh create  <run> <node> [base]    # worktree + branch from HEAD; prints the path
+worktree.sh create  <run> <node> [base] [--link <path>]...  # worktree + branch from HEAD; prints the path
 worktree.sh merge   <run> <node>           # commit leftovers, merge --no-ff into the current branch
 worktree.sh status  [run]                  # dirty/clean, commits ahead, merged?
 worktree.sh remove  <run> <node> [--force]
@@ -63,6 +63,18 @@ approval, add the script to your own permission allow-list, e.g. in
 ```
 
 Stale worktrees from an interrupted run: `/orchestrate cleanup --all`.
+
+**Making worktrees buildable.** A fresh worktree has only tracked files, so builders can't
+run tests without dependencies. List gitignored paths in `worktrees.link` (e.g.
+`["node_modules", ".env"]`) and the script symlinks them in from the main checkout, or set
+`worktrees.setup` to an install command that runs in each new worktree under normal
+permissions.
+
+**Merge gate.** Every builder replies with a status first — `DONE`, `NO_OP`, or `BLOCKED`.
+Only `DONE` nodes are merged (after a diff check). `NO_OP` means the builder found nothing
+worth changing, and its worktree is discarded instead of being padded with a cosmetic
+tweak. `BLOCKED` means its node check still failed after one correction pass, and the work
+stays out of the branch.
 
 ## Roles, not fixed model names
 
@@ -148,7 +160,7 @@ wins per key), so your user config sets global defaults and a repo overrides spe
     "review":    { "enabled": true,  "maxParallel": 4 },
     "optimize":  { "enabled": false, "maxParallel": 3 }
   },
-  "worktrees": { "mode": "auto", "cleanup": "on-success" },
+  "worktrees": { "mode": "auto", "cleanup": "on-success", "link": [] },
   "escalation": { "scoutToBuilder": true },
   "doctrine": "standard",
   "alwaysPassModelExplicitly": true
@@ -165,6 +177,8 @@ wins per key), so your user config sets global defaults and a repo overrides spe
 | `workflows.<name>.maxParallel` | int | Cap on parallel fan-out legs for this workflow (guards over-fan-out — multi-agent fan-out costs ~15× a single pass). |
 | `worktrees.mode` | `auto` · `always` · `off` | A worktree per writing node when ≥2 run at once (default), for every writing node, or never. |
 | `worktrees.cleanup` | `on-success` · `always` | Keep unmerged/failed node worktrees for inspection (default), or force-remove everything at the end. |
+| `worktrees.link` | gitignored paths | Symlinked from the main checkout into each worktree so nodes can build/test (shared, not copied). |
+| `worktrees.setup` | command | Run in each new worktree before its builder starts, under normal permissions. |
 | `escalation.scoutToBuilder` | bool | Re-run a thin/low-confidence scout leg at the builder tier before giving up (cascade). |
 | `threshold.maxParallelAuto` / `maxFilesAuto` | int | Limits used when `autonomy=threshold`. |
 | `doctrine` | `off` · `standard` · `strict` | How forcefully the `SessionStart` hook injects the doctrine (`off` disables it). |

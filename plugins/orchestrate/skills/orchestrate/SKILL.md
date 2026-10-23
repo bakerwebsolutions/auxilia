@@ -26,14 +26,14 @@ repo overrides specifics:
 
 Keys you act on: `roles.{orchestrator,builder,scout}`, `autonomy`, `threshold.*`,
 `workflows.<name>.{enabled,maxParallel}`, `escalation.scoutToBuilder`,
-`worktrees.{mode,cleanup}`,
+`worktrees.{mode,cleanup,link,setup}`,
 `harness`, `harnessProfiles`, and `alwaysPassModelExplicitly`. Defaults if no file: detect
 the harness from its available delegation tool, use its profile, and inherit a role when no
 supported model can be established. Never pass a Claude alias to Codex or a Codex model ID
 to Claude.
 `autonomy=propose`, all workflows except `optimize` enabled, pass model explicitly,
 `worktrees.mode=auto` (worktrees whenever two or more writing nodes run concurrently),
-`worktrees.cleanup=on-success`.
+`worktrees.cleanup=on-success`, `worktrees.link=[]`, no `worktrees.setup`.
 
 ## Resolve harness and roles before delegation
 
@@ -188,13 +188,14 @@ branch, so concurrent builders never share a checkout:
   writer works in the main checkout.
 - **`always`**: every writing node gets a worktree, even alone.
 - **`off`**: builders share the main checkout — the disjoint-`owns` rule is then the only
-  thing keeping parallel writers apart, so be strict about it.
+  thing keeping parallel writers apart, so be strict about it. The status gate (item 5
+  below) still applies; there is just no worktree to discard.
 
 Read-only nodes always run in the main checkout. All worktree operations go through the
 bundled script — never run `git worktree` or `git branch -D` by hand:
 
 ```
-${CLAUDE_SKILL_DIR}/scripts/worktree.sh create  <run> <node> [base]   # prints the worktree path
+${CLAUDE_SKILL_DIR}/scripts/worktree.sh create  <run> <node> [base] [--link <path>]...   # prints the path
 ${CLAUDE_SKILL_DIR}/scripts/worktree.sh merge   <run> <node>          # commit + merge into the current branch
 ${CLAUDE_SKILL_DIR}/scripts/worktree.sh status  [run]
 ${CLAUDE_SKILL_DIR}/scripts/worktree.sh remove  <run> <node> [--force]
@@ -214,18 +215,40 @@ Execute the graph wave by wave:
 2. **Create** a worktree for each ready writing node in the wave. It branches from the
    current `HEAD`, which already contains every earlier wave's merged work — that is how a
    node sees what it `needs`.
-3. **Brief** each builder with its worktree path as its working root: *"Work only inside
+3. **Make it buildable.** A fresh worktree holds only tracked files — no installed
+   dependencies, env files, or build output — so a builder can't run its check without help:
+   - pass `--link <path>` to `create` for each entry in `worktrees.link` (e.g.
+     `node_modules`, `.venv`, `.env`). The script symlinks it from the main checkout and only
+     accepts gitignored paths. Linked dependencies are **shared**: a node must not install
+     or upgrade packages through a link — if it needs a new dependency, that's its own
+     upstream node.
+   - if `worktrees.setup` is set, run it inside the new worktree (`cd <path> && <setup>`) as
+     an ordinary command, under normal permissions. It deliberately doesn't go through the
+     script: the script is pre-approved, and config-supplied commands must not inherit that.
+4. **Brief** each builder with its worktree path as its working root: *"Work only inside
    `<path>`. Use absolute paths under it for every read and edit, and `cd <path>` in every
-   shell command. Do not commit — leave your changes in the worktree."* Do **not** also pass
-   the harness's own worktree isolation (e.g. `isolation: "worktree"`); the script already
-   isolated it.
-4. **Merge** each finished node with `merge <run> <node>`. It commits whatever the builder
+   shell command. Do not commit — leave your changes in the worktree."* Plus its **node
+   check**: the narrowest test/typecheck/lint command that covers what it `owns`. Do **not**
+   also pass the harness's own worktree isolation (e.g. `isolation: "worktree"`); the script
+   already isolated it.
+5. **Gate on the result.** Every builder's reply opens with a status (see Step 6). Decide
+   per node before merging:
+   - **`DONE`** — skim the diff (`git -C <path> diff --stat`) for out-of-scope files, then
+     merge. Merge on the check passing and the diff matching the brief, not on the worker's
+     own account of its work.
+   - **`NO_OP`** — nothing to merge; `remove` the worktree. If the graph *expected* this
+     node to change something, treat it as a signal, not a pass: either the work was already
+     done or the brief was wrong. Check which before releasing the nodes that `need` it.
+   - **`BLOCKED`** — the builder already spent its one correction pass. Don't merge; keep
+     the worktree, and decide yourself: fix the brief and re-run, absorb the fix, or stop the
+     nodes downstream of it. A broken node never reaches the main branch.
+6. **Merge** each `DONE` node with `merge <run> <node>`. It commits whatever the builder
    left, then merges the branch into the current branch with `--no-ff`. Exit `3` means a
    conflict: the merge is aborted and the worktree kept. A conflict between nodes the graph
    called independent is a missing edge — resolve it yourself (orchestrator), or re-run the
    node from a fresh worktree on the new `HEAD`.
-5. **Remove** each merged node's worktree right away (`remove <run> <node>`) so long runs
-   don't pile up checkouts, then start the next wave.
+7. **Remove** each merged node's worktree right away (`remove <run> <node>`) so long runs
+   don't pile up checkouts, then start the next ready nodes.
 
 Don't wait for a whole wave if a node's blockers are all merged — start it as soon as it's
 ready. The waves are the plan; readiness is the schedule.
@@ -248,6 +271,10 @@ Boundaries:    what to leave alone; when it's done
 
 - Launch all **parallel** legs **in one message** (multiple Agent calls) so they run concurrently.
 - **Cap** parallel legs at `workflows.<name>.maxParallel`. Prefer fewer well-scoped agents.
+- **Every writing leg returns a status first**: `DONE` · `NO_OP` · `BLOCKED` (the
+  `implementer` agent already does). Say in the brief that no change is an acceptable
+  answer — otherwise a builder handed already-clean code will invent a tweak to look useful.
+  Read-only legs need no status; "nothing found" is already their valid result.
 - Pass an explicit model only when `alwaysPassModelExplicitly` is true **and** the resolved
   model is advertised by the active harness. Use that harness's spawn API and parameter
   spelling; otherwise omit it and inherit the harness default.

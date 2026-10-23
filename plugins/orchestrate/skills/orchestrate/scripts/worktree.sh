@@ -6,7 +6,10 @@
 # branch under orchestrate/<run>/ — it never removes anything outside that namespace, which
 # is what makes it safe to allowlist.
 #
-#   worktree.sh create  <run> <node> [base]   new worktree + branch from base (default: HEAD); prints path
+#   worktree.sh create  <run> <node> [base] [--link <path>]...
+#                                             new worktree + branch from base (default: HEAD); prints path.
+#                                             --link symlinks a gitignored path (node_modules, .env, …)
+#                                             from the main checkout so the node can build and test
 #   worktree.sh path    <run> <node>          print the node's worktree path
 #   worktree.sh status  [run]                 list orchestrate worktrees (all runs if omitted)
 #   worktree.sh merge   <run> <node>          commit leftovers in the node, merge it into the current branch
@@ -17,7 +20,7 @@
 set -euo pipefail
 
 die() { printf 'worktree.sh: %s\n' "$*" >&2; exit 1; }
-usage() { sed -n '4,16p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' >&2; exit 2; }
+usage() { sed -n '4,19p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' >&2; exit 2; }
 
 valid_id() { [[ "$1" =~ ^[a-z0-9][a-z0-9._-]{0,63}$ ]] && [[ "$1" != *..* ]] || die "invalid id '$1' (want [a-z0-9][a-z0-9._-]*)"; }
 
@@ -28,10 +31,10 @@ REPO="$(dirname "$COMMON_DIR")"
 ROOT="$REPO/.orchestrate/worktrees"
 g() { git -C "$REPO" "$@"; }
 
-ensure_excluded() {
+ensure_excluded() { # ensure_excluded <pattern> — append to the repo-local exclude once
   local exclude="$COMMON_DIR/info/exclude"
   mkdir -p "$(dirname "$exclude")"
-  grep -qxF '/.orchestrate/' "$exclude" 2>/dev/null || printf '/.orchestrate/\n' >> "$exclude"
+  grep -qxF "$1" "$exclude" 2>/dev/null || printf '%s\n' "$1" >> "$exclude"
 }
 
 node_path()   { printf '%s/%s/%s' "$ROOT" "$1" "$2"; }
@@ -62,13 +65,36 @@ cmd="${1:-}"; [ -n "$cmd" ] || usage; shift
 case "$cmd" in
   create)
     [ $# -ge 2 ] || usage
-    run="$1"; node="$2"; base="${3:-HEAD}"; valid_id "$run"; valid_id "$node"
+    run="$1"; node="$2"; shift 2; valid_id "$run"; valid_id "$node"
+    base="HEAD"; links=()
+    if [ $# -gt 0 ] && [[ "$1" != --* ]]; then base="$1"; shift; fi
+    while [ $# -gt 0 ]; do
+      [ "$1" = "--link" ] && [ $# -ge 2 ] || usage
+      links+=("${2%/}"); shift 2
+    done
     path="$(node_path "$run" "$node")"; branch="$(node_branch "$run" "$node")"
     [ -e "$path" ] && die "$path already exists"
     g rev-parse --verify --quiet "$base^{commit}" >/dev/null || die "unknown base '$base'"
-    ensure_excluded
+    # Only gitignored paths may be linked: they can never be committed by `merge`, and a
+    # link can't reach outside the main checkout.
+    for l in "${links[@]:-}"; do
+      [ -n "$l" ] || continue
+      [[ "$l" != /* && "/$l/" != */../* && "/$l/" != */./* ]] || die "--link '$l': want a path relative to the repo root"
+      [ -e "$REPO/$l" ] || die "--link '$l': not found in $REPO"
+      g check-ignore -q "$l" || die "--link '$l': not gitignored; only ignored paths (dependencies, env files, build output) can be linked"
+    done
+    ensure_excluded '/.orchestrate/'
     mkdir -p "$(dirname "$path")"
     g worktree add --quiet -b "$branch" "$path" "$base" >&2
+    for l in "${links[@]:-}"; do
+      [ -n "$l" ] || continue
+      [ -e "$path/$l" ] && { echo "skipped link $l: already present in the worktree" >&2; continue; }
+      mkdir -p "$(dirname "$path/$l")"
+      ln -s "$REPO/$l" "$path/$l"
+      # A directory-only ignore rule (`node_modules/`) doesn't match a symlink, so without
+      # this exact-path rule `merge` would commit the link over the real directory.
+      ensure_excluded "/$l"
+    done
     printf '%s\n' "$path"
     ;;
 
@@ -106,6 +132,10 @@ case "$cmd" in
     g diff --quiet && g diff --cached --quiet || die "main checkout $REPO has uncommitted tracked changes; commit or stash them before merging"
     if [ -n "$(git -C "$path" status --porcelain)" ]; then
       git -C "$path" add -A
+      if typechange="$(git -C "$path" diff --cached --name-only --diff-filter=T)" && [ -n "$typechange" ]; then
+        git -C "$path" reset --quiet
+        die "$run/$node replaces files with symlinks or vice versa ($typechange); refusing to merge — inspect $path"
+      fi
       git -C "$path" commit --quiet --no-verify -m "orchestrate($run): $node"
     fi
     if [ "$(g rev-list --count "HEAD..$branch")" = 0 ]; then

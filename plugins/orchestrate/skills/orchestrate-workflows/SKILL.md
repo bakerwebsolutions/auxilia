@@ -70,6 +70,7 @@ Common edits and where they land:
 | "stop injecting the doctrine" | `doctrine: "off"` |
 | "don't use worktrees" / "always use worktrees" | `worktrees.mode: "off"` / `"always"` |
 | "throw away failed worktrees too" | `worktrees.cleanup: "always"` |
+| "builders can't run tests in worktrees" | `worktrees.link: ["node_modules", …]` and/or `worktrees.setup: "<install cmd>"` |
 
 ## Mode C — Explain / dry-run
 

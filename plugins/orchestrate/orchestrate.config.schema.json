@@ -71,6 +71,16 @@
           "description": "on-success = remove merged worktrees and keep any with unmerged or uncommitted work for inspection; always = force-remove every worktree of the run at the end, discarding unmerged work.",
           "enum": ["on-success", "always"],
           "default": "on-success"
+        },
+        "link": {
+          "description": "Gitignored paths (relative to the repo root) symlinked from the main checkout into each new worktree so nodes can build and test, e.g. [\"node_modules\", \".venv\", \".env\"]. Shared, not copied: nodes must not install packages through them.",
+          "type": "array",
+          "items": { "type": "string", "pattern": "^[^/].*" },
+          "default": []
+        },
+        "setup": {
+          "description": "Optional command run inside each new worktree before its builder starts (e.g. \"npm ci\"). Runs as an ordinary command under normal permissions, never through the pre-approved worktree script.",
+          "type": "string"
         }
       }
     },

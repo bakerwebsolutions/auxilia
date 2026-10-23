@@ -36,12 +36,16 @@ Output format / Tools-sources / Boundaries) **plus**:
 - the shared interface it must satisfy (from the prelude)
 - the in-scope files it may touch (its `owns`)
 - its worktree path as the working root, and "don't commit"
+- its node check (the narrowest test/typecheck covering what it owns) and that `NO_OP` is
+  an acceptable answer
 
-Launch every ready node **in one message**. When a node finishes, `merge` it, `remove` its
-worktree, and start any node whose `needs` are now all merged — folding the prerequisite's
+Launch every ready node **in one message**. When a node finishes, gate on its status
+(router Step 5): merge `DONE`, discard `NO_OP` (and question it if the graph expected a
+change), hold `BLOCKED` out of the branch. Then `remove` its worktree and start any node
+whose `needs` are now all merged — folding the prerequisite's
 result into that node's brief. Each builder implements to the contract, matches surrounding
-style, and runs the local check for what it changed (its own tests/lint, not the full
-suite).
+style, and runs its node check — its own tests/lint, not the full suite — with one
+correction pass if it fails.
 
 ## Converge (sequential — verify)
 

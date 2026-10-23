@@ -41,7 +41,9 @@ Give each the 4-part contract, framed as "try this optimization approach; re-run
 benchmark from the prelude and report the measured delta." Output format: the measured
 delta vs. baseline on the shared benchmark, plus whether the existing tests still pass. The
 deliverable is a measured change, not just a diff — a candidate that isn't re-benchmarked
-isn't done.
+isn't done. Tell each builder that `NO_OP` is a valid result: if its approach doesn't move
+the number, it should say so with the measurement rather than keep a change that doesn't
+pay for itself.
 
 ## Converge (sequential — orchestrator)
 
