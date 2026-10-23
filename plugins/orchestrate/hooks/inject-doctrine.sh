@@ -97,8 +97,10 @@ prelude first: what one thing, once decided, makes the rest independent?
 
 When delegating a fan-out leg, give a **minimal-context 4-part brief**: objective · output
 format · tools/sources · boundaries. Send only what that agent needs — never your whole
-context. Launch independent legs concurrently (multiple Agent calls in one message); gate
-dependent legs behind their prerequisites.
+context. Break multi-part work into a dependency graph first: blockers (the nodes others
+\`need\`) go first, independent nodes run concurrently (multiple Agent calls in one message),
+dependent nodes wait until their prerequisites are merged. Parallel writers each get their
+own git worktree via the \`/orchestrate\` skill's worktree script, which also cleans them up.
 
 Autonomy: $AUTONOMY_LINE
 $MODEL_LINE
