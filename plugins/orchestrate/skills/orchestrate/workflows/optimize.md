@@ -34,7 +34,8 @@ the first task — stay in the prelude until you have a repeatable, deterministi
 One builder per candidate optimization, capped at `workflows.optimize.maxParallel`.
 Diversity is the point — pick genuinely different optimization approaches (e.g. algorithmic
 change, caching, reduced allocations, batching), not variations on one guess. Isolate each
-builder in its own git worktree (`isolation: worktree`) so parallel edits don't collide.
+builder in its own worktree via the router's script (`worktree.sh create <run> <candidate>`,
+router Step 5) so parallel edits — and their benchmark runs — don't collide.
 
 Give each the 4-part contract, framed as "try this optimization approach; re-run the
 benchmark from the prelude and report the measured delta." Output format: the measured
@@ -45,7 +46,8 @@ isn't done.
 ## Converge (sequential — orchestrator)
 
 Compare the measured deltas across legs. **Keep the winner**: correctness-preserving
-(tests pass) and the best measured improvement — discard the rest. Re-run the benchmark on
+(tests pass) and the best measured improvement — `merge` only that candidate, then
+`cleanup <run> --force` to discard the losing worktrees. Re-run the benchmark on
 the winner one more time to confirm the improvement is real and stable, not noise. Report
 the before/after numbers.
 

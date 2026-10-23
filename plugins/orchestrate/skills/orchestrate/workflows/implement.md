@@ -18,32 +18,38 @@ returned or an option chosen.
 
 Orchestrator understands the affected code — optionally send **1 scout** to map it if you
 don't already know the terrain. Then write the **shared contract**: the interfaces,
-function signatures, types, and data shapes the parallel units will build against. Identify
-the seams — which units are truly independent vs. which form a dependency chain.
+function signatures, types, and data shapes the parallel units will build against. Then turn
+the units into the **work graph** (router Step 2): each unit is a node with the files it
+`owns` and the nodes it `needs`. The contract itself is the root node — the blocker
+everything else waits on.
 
 The contract *is* the artifact that unblocks fan-out: once the interface between pieces is
 nailed down, the pieces can be built in parallel without colliding. If you can't write the
 contract yet, the work isn't ready to fan out — keep reasoning, don't fan out prematurely.
 
-## Fan-out (parallel — builder)
+## Fan-out (parallel — builder, wave by wave)
 
-One builder per independent unit, capped at `workflows.implement.maxParallel`. Each brief
-is the 4-part contract (Objective / Output format / Tools-sources / Boundaries) **plus**:
+One builder per ready node, capped at `workflows.implement.maxParallel`. Each writing node
+runs in its own worktree (router Step 5). Each brief is the 4-part contract (Objective /
+Output format / Tools-sources / Boundaries) **plus**:
 
 - the shared interface it must satisfy (from the prelude)
-- the in-scope files it may touch
+- the in-scope files it may touch (its `owns`)
+- its worktree path as the working root, and "don't commit"
 
-Launch all independent units **in one message**. For units that form a dependency chain,
-**gate** them — launch the next only after its prerequisite returns, folding that result
-into the next unit's brief. Each builder implements to the contract, matches surrounding
+Launch every ready node **in one message**. When a node finishes, `merge` it, `remove` its
+worktree, and start any node whose `needs` are now all merged — folding the prerequisite's
+result into that node's brief. Each builder implements to the contract, matches surrounding
 style, and runs the local check for what it changed (its own tests/lint, not the full
 suite).
 
 ## Converge (sequential — verify)
 
 Run the full tests / typecheck / lint — mechanical verification is **builder** tier, not
-orchestrator. Orchestrator then reconciles: integrates the units, resolves any contract
-drift between them, and reports what changed per file.
+orchestrator. Run it on the main checkout,
+after every node is merged. Orchestrator then reconciles: resolves any merge conflict or
+contract drift between units, reports what changed per file, and runs `cleanup <run>`
+(router Step 8).
 
 ## Flavors
 
@@ -52,8 +58,9 @@ drift between them, and reports what changed per file.
 - **test** — the deliverable is tests; the oracle is red→green / coverage, not a feature
   spec.
 - **docs** — the deliverable is prose; verify is a read-back for accuracy, not a test run.
-- **small-migration** — many homogeneous mechanical edits: fan out one builder per
-  file/module (parallel-per-unit), a verifier does the integration pass. Large or novel
+- **small-migration** — many homogeneous mechanical edits: a flat graph, one builder per
+  file/module (parallel-per-unit, each in its worktree), a verifier does the integration
+  pass. Large or novel
   migrations should go through `design` first, not straight here.
 
 ## Notes

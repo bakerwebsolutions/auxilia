@@ -1,6 +1,7 @@
 ---
 name: orchestrate-workflows
 description: Companion to /orchestrate — run a specific workflow directly (bypassing the router's classification), inspect or edit the layered config, or dry-run "what would the router pick" for a prompt. Use when the user says "run the review workflow", "force implement", "show my orchestrate config", "use Astra to orchestrate", "edit the orchestrate config", or "what workflow would this be".
+allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/skills/orchestrate/scripts/worktree.sh *)
 ---
 
 # orchestrate-workflows — run + manage
@@ -35,8 +36,10 @@ diff", "force debug"). This **skips classification** — the user has already ch
 2. If the named workflow is `enabled: false`, say so and confirm the user wants it anyway
    (a direct request overrides the enabled flag — honor it, just flag it once).
 3. Read this package's `skills/orchestrate/workflows/<name>.md` and run it exactly
-   as the router would (Steps 3–5 of the `orchestrate` skill: announce per `autonomy`, fan
-   out with 4-part briefs capped at `maxParallel`, converge). Honor a natural-language role
+   as the router would (Steps 2 and 4–8 of the `orchestrate` skill: build the work graph,
+   announce per `autonomy`, isolate writing nodes in worktrees, fan out with 4-part briefs
+   capped at `maxParallel`, converge, clean up). Call the worktree script as
+   `${CLAUDE_PLUGIN_ROOT}/skills/orchestrate/scripts/worktree.sh`. Honor a natural-language role
    override only when the active harness advertises that model.
 
 ## Mode B — Manage the config
@@ -65,6 +68,8 @@ Common edits and where they land:
 | "allow more parallel agents" | `workflows.<name>.maxParallel` |
 | "just run it, don't ask" | `autonomy: "auto"` |
 | "stop injecting the doctrine" | `doctrine: "off"` |
+| "don't use worktrees" / "always use worktrees" | `worktrees.mode: "off"` / `"always"` |
+| "throw away failed worktrees too" | `worktrees.cleanup: "always"` |
 
 ## Mode C — Explain / dry-run
 
@@ -75,8 +80,9 @@ Use for "what workflow would this be", "which tier handles X", "explain the rout
 2. Apply the router's Step 1 classification to the user's described task: name the
    **workflow**, the **oracle** that decided it (not just the keyword), and the runner-up if
    it was close.
-3. Sketch the plan the recipe would produce: the **prelude** (shared unblock), the
-   **fan-out** (N legs × which role/model), and the **convergence** — without spawning agents.
+3. Sketch the plan the recipe would produce: the **prelude** (shared unblock), the **work
+   graph** (nodes, `needs` edges, waves, critical path, which nodes get worktrees), and the
+   **convergence** — without spawning agents or creating worktrees.
 4. Note the effective roles (including any top-tier model override) and the `maxParallel` cap that would
    apply.
 

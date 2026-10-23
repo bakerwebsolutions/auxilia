@@ -57,6 +57,23 @@
         "optimize":  { "$ref": "#/$defs/workflow" }
       }
     },
+    "worktrees": {
+      "description": "Git worktree isolation for writing nodes of the work graph. Worktrees are created, merged, and removed only through the skill's bundled scripts/worktree.sh.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "mode": {
+          "description": "auto = a worktree per writing node whenever two or more run concurrently; always = a worktree for every writing node; off = builders share the main checkout.",
+          "enum": ["auto", "always", "off"],
+          "default": "auto"
+        },
+        "cleanup": {
+          "description": "on-success = remove merged worktrees and keep any with unmerged or uncommitted work for inspection; always = force-remove every worktree of the run at the end, discarding unmerged work.",
+          "enum": ["on-success", "always"],
+          "default": "on-success"
+        }
+      }
+    },
     "escalation": {
       "description": "Cascade behavior. When a scout (Haiku) returns thin or low-confidence output on a leg, re-run that one leg at the builder tier before giving up.",
       "type": "object",
