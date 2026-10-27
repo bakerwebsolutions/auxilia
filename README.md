@@ -10,6 +10,7 @@ on any machine.
 |--------|-------------|---------|
 | [research-spike](plugins/research-spike/README.md) | Fan out parallel web-research agents, synthesize findings, and save durable research artifacts | `1.0.0` |
 | [orchestrate](plugins/orchestrate/README.md) | Task router — detect the task type and run a pre-curated, model-tiered workflow (research · design · implement · debug · review · optimize): shared prelude → parallel fan-out (Sonnet builds, Haiku scouts) → converge; Opus orchestrates, swappable to Fable; parallel builders isolated in auto-cleaned git worktrees | `2.1.0` |
+| [copywriter](plugins/copywriter/README.md) | Customer-facing copy that doesn't read as generated: fact sheet + voice sample first, placeholders instead of filler, search/ad fit check, then a fresh-context reviewer for AI tells and unsupported claims | `1.0.0` |
 
 ## Install
 

@@ -34,6 +34,18 @@
       "source": "./plugins/orchestrate",
       "category": "workflow",
       "homepage": "https://github.com/bakerwebsolutions/auxilia/tree/master/plugins/orchestrate"
+    },
+    {
+      "name": "copywriter",
+      "description": "Write customer-facing copy (landing pages, service pages, ad pages) that doesn't read as generated: gather a fact sheet and voice sample first, draft with placeholders instead of filler, fit search/ad basics, then run a fresh-context reviewer for AI tells and unsupported claims.",
+      "version": "1.0.0",
+      "author": {
+        "name": "Dallan Baker",
+        "email": "dallan@bakerwebsolutions.com"
+      },
+      "source": "./plugins/copywriter",
+      "category": "writing",
+      "homepage": "https://github.com/bakerwebsolutions/auxilia/tree/master/plugins/copywriter"
     }
   ]
 }
