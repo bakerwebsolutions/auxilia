@@ -21,6 +21,9 @@ rewrite the page.
 ## How to review
 - Read the whole page once as a customer before checking the list.
 - A single instance of a pattern is usually fine; flag repetition and vagueness.
+- Concrete three-item lists ("brush, trees and stumps") are normal English; flag triads
+  only of adjectives or abstract qualities ("fast, reliable and affordable").
+- Count CTA repeats on the rendered page only; title and meta description don't show.
 - Check every factual claim (numbers, licenses, services, places, guarantees, tenure)
   against the fact sheet. A claim it doesn't support is a **blocker** even if it reads
   well. Placeholders like `[YEARS]` are correct, not findings.
