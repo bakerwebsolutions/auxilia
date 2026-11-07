@@ -24,8 +24,8 @@ repo overrides specifics:
 2. The active harness's user-level config location
 3. The installed package's `orchestrate.config.json` (shipped default)
 
-Keys you act on: `roles.{orchestrator,builder,scout}`, `autonomy`, `threshold.*`,
-`workflows.<name>.{enabled,maxParallel}`, `escalation.scoutToBuilder`,
+Keys you act on: `roles.{orchestrator,senior,builder,scout}`, `autonomy`, `threshold.*`,
+`workflows.<name>.{enabled,maxParallel,maxSenior}`, `escalation.{scoutToBuilder,builderToSenior}`,
 `worktrees.{mode,cleanup,link,setup}`,
 `harness`, `harnessProfiles`, and `alwaysPassModelExplicitly`. Defaults if no file: detect
 the harness from its available delegation tool, use its profile, and inherit a role when no
@@ -46,18 +46,23 @@ Set the harness in this precedence order:
    default (or stay single-agent if delegation is unavailable).
 
 Resolve each role by taking an explicit non-`auto` `roles.<role>` value, otherwise the
-selected `harnessProfiles.<harness>.roles.<role>` value. Before passing it, verify the value
+selected `harnessProfiles.<harness>.roles.<role>` value. **`senior`** has one extra
+fallback: if neither is set, it takes the profile's top tier
+(`harnessProfiles.<harness>.roles.orchestrator` — not a per-run orchestrator override). So
+"senior" always means *the strongest model this harness profile offers*, without the router
+or any recipe naming one. Before passing it, verify the value
 is in the runtime's advertised model choices. If it is absent, omit the model parameter;
 the harness default is safer than a stale profile. The active primary model is context, not
 a reliable model catalog.
 
 ## The roles
 
-Everything routes to **four roles**, not four fixed model names. The config maps roles → models.
+Everything routes to **four roles**, not fixed model names. The config maps roles → models.
 
 | Role | Does | Default | Read/write |
 |------|------|---------|-----------|
 | **orchestrator** | classify · run the recipe · reason on the prelude · synthesize · adversarially judge/verify | harness profile | you (this session) + peer instances you spawn for judging |
+| **senior** | implement work-graph nodes classified **hard** (Step 2) | profile `senior`, else the profile's top tier | writes |
 | **builder** | implement code · write prose · run tests to verify | harness profile | writes |
 | **scout** | search · locate · map · external research | harness profile | read-only |
 
@@ -127,7 +132,7 @@ Each node is one self-contained unit of work:
 | `does` | one line: what this node makes true |
 | `owns` | files/modules it may write — nodes that run concurrently must own **disjoint** sets |
 | `needs` | ids of nodes that must be **merged** before this one starts |
-| `role` | scout / builder / orchestrator |
+| `role` | scout / builder / senior / orchestrator |
 
 Add an edge `A → B` (B needs A) when any of these hold:
 
@@ -149,6 +154,22 @@ Then read the graph:
 - **Waves** are the topological layers: wave 0 has no `needs`, wave *k* needs only earlier
   waves. Nodes in a wave are the parallel fan-out, capped at `workflows.<name>.maxParallel`.
 
+**Classify each writing node's tier.** Default to `builder`. Mark a node `senior` when any
+of these hold, and record the reason in one line:
+
+- **Blocker** — several nodes `need` it (often the contract node itself); an error there
+  propagates downstream.
+- **High-stakes domain** — concurrency, security/auth/crypto, data migration, money.
+- **Novel logic** — a new algorithm or invariant-heavy code, not wiring to a contract.
+- **Contract gaps** — the builder must make design calls the prelude couldn't settle.
+- **Untested blast radius** — cross-module change with no tests pinning the behavior.
+
+Do not classify by size: a large mechanical edit is `builder`; a 20-line lock-ordering fix
+is `senior`. Cap senior nodes at `workflows.<name>.maxSenior`; if more qualify, the contract
+is unfinished — tighten the prelude instead of buying a bigger model. A senior node is still
+a delegated builder (the `implementer` agent with the senior model) — don't build it inline
+as the orchestrator. The user can override any node's tier in natural language.
+
 Collapse the graph when it's trivial: a single node, or a straight chain of small edits, is
 just sequential work — don't build ceremony around it. Read-only workflows (research,
 design, review, debug hypotheses) usually produce a flat graph of independent legs; the
@@ -164,7 +185,8 @@ convergence. It also lists the flavors that ride on it and which stages they tog
 
 Announce the plan compactly before spawning anything: the **detected workflow** (and why),
 the **prelude**, the **work graph**, the tier each node runs on, and the **convergence**.
-Show the graph as a table (`id · does · owns · needs · role`) followed by its waves and
+Show the graph as a table (`id · does · owns · needs · role · why`, with `why` filled for
+senior nodes) followed by its waves and
 critical path, e.g. `wave 0: contract → wave 1: api, ui → wave 2: e2e`.
 
 - **`propose`** (default): stop after announcing and wait for approval. Pick the run id now
@@ -278,8 +300,15 @@ Boundaries:    what to leave alone; when it's done
 - Pass an explicit model only when `alwaysPassModelExplicitly` is true **and** the resolved
   model is advertised by the active harness. Use that harness's spawn API and parameter
   spelling; otherwise omit it and inherit the harness default.
+- A `senior` node uses the same builder agent and brief; only the model differs (the
+  resolved `senior` role). If the senior model can't be validated for this harness, run the
+  node at the builder tier and say so in the report.
 - **Cascade** (`escalation.scoutToBuilder`): if a scout leg returns thin/low-confidence
   output, re-run that one leg at the builder tier before giving up.
+- **Cascade** (`escalation.builderToSenior`): if a builder node fails its check or reports the
+  contract is insufficient, re-run that one node once at the senior tier — `remove <run>
+  <node> --force`, then `create` it fresh on the current `HEAD`. Escalations don't count
+  against `maxSenior`. A senior node that fails comes back to the orchestrator.
 
 ## Step 7 — Converge and synthesize
 

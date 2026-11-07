@@ -78,11 +78,12 @@ stays out of the branch.
 
 ## Roles, not fixed model names
 
-Work routes to **three roles**; config maps roles → models.
+Work routes to **four roles**; config maps roles → models.
 
 | Role | Does | Default | Read/write |
 |------|------|---------|-----------|
 | **orchestrator** | classify · reason on the prelude · judge/verify adversarially · synthesize | harness profile | you + peer instances for judging |
+| **senior** | implement work-graph nodes classified hard | profile `senior`, else the profile's top tier | writes |
 | **builder** | implement code · write prose · run tests | harness profile | writes |
 | **scout** | search · locate · map · external research | harness profile | read-only |
 
@@ -90,6 +91,15 @@ Work routes to **three roles**; config maps roles → models.
 harness, then an explicit config or natural-language override wins for that run. The router
 only passes a model value when it is advertised by that runtime; otherwise it inherits the
 harness default. This prevents stale Claude aliases being sent to Codex and vice versa.
+
+**Senior means "one tier up", not a model name.** While building the work graph, the
+orchestrator tags each writing node `builder` (the default) or `senior` — blockers, high-stakes
+domains (concurrency, auth, migrations), novel logic, contract gaps, untested blast radius —
+with a one-line reason shown in the plan. Senior nodes run the same `implementer` agent with a
+stronger model: `roles.senior`, else `harnessProfiles.<harness>.roles.senior`, else that
+profile's top tier (Opus on the Claude profile, Sol on Codex). A builder node that fails its
+check escalates once to senior. `workflows.<name>.maxSenior` caps how many nodes are
+classified senior per run.
 
 ## The six workflows
 
@@ -147,7 +157,7 @@ wins per key), so your user config sets global defaults and a repo overrides spe
 {
   "autonomy": "propose",
   "harness": "auto",
-  "roles": { "orchestrator": "auto", "builder": "auto", "scout": "auto" },
+  "roles": { "orchestrator": "auto", "senior": "auto", "builder": "auto", "scout": "auto" },
   "harnessProfiles": {
     "claude": { "roles": { "orchestrator": "opus", "builder": "sonnet", "scout": "haiku" } },
     "codex": { "roles": { "orchestrator": "gpt-5.6-sol", "builder": "gpt-5.6-terra", "scout": "gpt-5.6-luna" } }
@@ -155,13 +165,13 @@ wins per key), so your user config sets global defaults and a repo overrides spe
   "workflows": {
     "research":  { "enabled": true,  "maxParallel": 4 },
     "design":    { "enabled": true,  "maxParallel": 3 },
-    "implement": { "enabled": true,  "maxParallel": 3 },
+    "implement": { "enabled": true,  "maxParallel": 3, "maxSenior": 1 },
     "debug":     { "enabled": true,  "maxParallel": 4 },
     "review":    { "enabled": true,  "maxParallel": 4 },
     "optimize":  { "enabled": false, "maxParallel": 3 }
   },
   "worktrees": { "mode": "auto", "cleanup": "on-success", "link": [] },
-  "escalation": { "scoutToBuilder": true },
+  "escalation": { "scoutToBuilder": true, "builderToSenior": true },
   "doctrine": "standard",
   "alwaysPassModelExplicitly": true
 }
@@ -171,15 +181,17 @@ wins per key), so your user config sets global defaults and a repo overrides spe
 |-----|--------|---------|
 | `autonomy` | `propose` · `auto` · `threshold` | After classifying + planning: announce and wait (default), run immediately, or auto only under the thresholds. |
 | `harness` | `auto` · `claude` · `codex` | Chooses a profile. `auto` detects from the available delegation API. |
-| `roles.orchestrator` / `builder` / `scout` | `auto` or model alias/ID | Explicit role override. It wins over the profile only when the running harness advertises it. |
+| `roles.orchestrator` / `senior` / `builder` / `scout` | `auto` or model alias/ID | Explicit role override. It wins over the profile only when the running harness advertises it. `senior: auto` falls back to the profile's top tier. |
 | `harnessProfiles` | per-harness role mappings | Fallback policy for Claude and Codex. Update it when your runtime offers a different model set. |
 | `workflows.<name>.enabled` | bool | Whether the router may select this workflow. |
+| `workflows.<name>.maxSenior` | int | Cap on nodes classified to the senior tier per run (default 1; escalations excluded). |
 | `workflows.<name>.maxParallel` | int | Cap on parallel fan-out legs for this workflow (guards over-fan-out — multi-agent fan-out costs ~15× a single pass). |
 | `worktrees.mode` | `auto` · `always` · `off` | A worktree per writing node when ≥2 run at once (default), for every writing node, or never. |
 | `worktrees.cleanup` | `on-success` · `always` | Keep unmerged/failed node worktrees for inspection (default), or force-remove everything at the end. |
 | `worktrees.link` | gitignored paths | Symlinked from the main checkout into each worktree so nodes can build/test (shared, not copied). |
 | `worktrees.setup` | command | Run in each new worktree before its builder starts, under normal permissions. |
 | `escalation.scoutToBuilder` | bool | Re-run a thin/low-confidence scout leg at the builder tier before giving up (cascade). |
+| `escalation.builderToSenior` | bool | Re-run a builder node that failed its check (or hit a contract gap) once at the senior tier. |
 | `threshold.maxParallelAuto` / `maxFilesAuto` | int | Limits used when `autonomy=threshold`. |
 | `doctrine` | `off` · `standard` · `strict` | How forcefully the `SessionStart` hook injects the doctrine (`off` disables it). |
 | `alwaysPassModelExplicitly` | bool | Tell the orchestrator to pass a validated model override whenever its harness supports explicit model selection. |
