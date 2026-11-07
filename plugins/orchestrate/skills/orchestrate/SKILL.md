@@ -1,6 +1,6 @@
 ---
 name: orchestrate
-description: Route a task to a pre-curated, role-tiered workflow and run it. Use when the user says "orchestrate", "decompose", "delegate this", "parallelize", "fan out", or hands you a multi-part task. Detects the task type (research · design · implement · debug · review · optimize), then runs that workflow's recipe — a shared sequential prelude, a parallel fan-out, and a convergence step. Resolve models from the active harness before delegating. Decomposes work into a dependency graph and isolates parallel writers in git worktrees.
+description: Route a task to a pre-curated, role-tiered workflow and run it. Use when the user says "orchestrate", "decompose", "delegate this", "parallelize", "fan out", or hands you a multi-part task. Detects the task type (research · design · implement · debug · review · optimize), then runs that workflow's recipe — a shared sequential prelude, a parallel fan-out, and a convergence step. Resolve models from the active harness before delegating. Decomposes work into a dependency graph and isolates parallel writers in git worktrees. Large multi-workstream builds ("large build") run under a manager with workstream leads and a decision ledger.
 argument-hint: "[task]  |  go <run>  |  cleanup <run>"
 allowed-tools: Bash(${CLAUDE_SKILL_DIR}/scripts/worktree.sh *)
 ---
@@ -24,16 +24,18 @@ repo overrides specifics:
 2. The active harness's user-level config location
 3. The installed package's `orchestrate.config.json` (shipped default)
 
-Keys you act on: `roles.{orchestrator,senior,builder,scout}`, `autonomy`, `threshold.*`,
-`workflows.<name>.{enabled,maxParallel,maxSenior}`, `escalation.{scoutToBuilder,builderToSenior}`,
-`worktrees.{mode,cleanup,link,setup}`,
+Keys you act on: `roles.{orchestrator,senior,builder,scout,manager,lead}`, `autonomy`,
+`threshold.*`, `workflows.<name>.{enabled,maxParallel,maxSenior}`,
+`escalation.{scoutToBuilder,builderToSenior}`, `worktrees.{mode,cleanup,link,setup}`,
+`largeBuild.{enabled,minWorkstreams,minNodes,maxLeads,maxParallel,ledger,status}`,
 `harness`, `harnessProfiles`, and `alwaysPassModelExplicitly`. Defaults if no file: detect
 the harness from its available delegation tool, use its profile, and inherit a role when no
 supported model can be established. Never pass a Claude alias to Codex or a Codex model ID
 to Claude.
 `autonomy=propose`, all workflows except `optimize` enabled, pass model explicitly,
 `worktrees.mode=auto` (worktrees whenever two or more writing nodes run concurrently),
-`worktrees.cleanup=on-success`, `worktrees.link=[]`, no `worktrees.setup`.
+`worktrees.cleanup=on-success`, `worktrees.link=[]`, no `worktrees.setup`, and large-build
+auto-routing on at 2 workstreams and 8 writing nodes, 3 leads at most.
 
 ## Resolve harness and roles before delegation
 
@@ -51,7 +53,9 @@ fallback: if neither is set, it takes the profile's top tier
 (`harnessProfiles.<harness>.roles.orchestrator` — not a per-run orchestrator override). So
 "senior" always means *the strongest model this harness profile offers*, without the router
 or any recipe naming one. Before passing it, verify the value
-is in the runtime's advertised model choices. If it is absent, omit the model parameter;
+is in the runtime's advertised model choices. The large-build roles fall back the same way:
+**`manager`** to the resolved `orchestrator` (this session), **`lead`** to the resolved
+`senior`. If it is absent, omit the model parameter;
 the harness default is safer than a stale profile. The active primary model is context, not
 a reliable model catalog.
 
@@ -65,6 +69,10 @@ Everything routes to **four roles**, not fixed model names. The config maps role
 | **senior** | implement work-graph nodes classified **hard** (Step 2) | profile `senior`, else the profile's top tier | writes |
 | **builder** | implement code · write prose · run tests to verify | harness profile | writes |
 | **scout** | search · locate · map · external research | harness profile | read-only |
+
+Large-build mode adds two roles on top of these: a **manager** (the orchestrator, owning
+the plan, merge order and decision ledger) and two or three workstream **leads** (top tier
+by default), each running its own builders. See `workflows/large-build.md`.
 
 **Swapping the orchestrator = swapping the whole top tier.** A natural-language model
 override applies only when that model is advertised by the active harness; it always beats
@@ -112,6 +120,10 @@ keywords overlap, oracles don't.
 
 **Flavors ride on a base workflow** (they toggle stages, they are not their own route):
 refactor · test · docs · small-migration → **implement**; security-audit → **review**.
+
+**Large build is a scale mode of implement**, not a seventh workflow: same oracle, run by a
+manager and workstream leads. It fires on an explicit ask ("large build", "big build", "run
+this as a managed build") or from the work graph (Step 2b).
 
 If two workflows genuinely tie, or the request is too vague to classify, **ask one
 question** — do not guess. If the picked workflow is `enabled: false` in config, say so and
@@ -170,6 +182,19 @@ is unfinished — tighten the prelude instead of buying a bigger model. A senior
 a delegated builder (the `implementer` agent with the senior model) — don't build it inline
 as the orchestrator. The user can override any node's tier in natural language.
 
+### Step 2b — Scale up to large-build
+
+After building an **implement** graph, count its **workstreams**: remove the shared
+contract node(s) and count the connected groups left (by `needs` edges) that own disjoint
+areas. Switch to large-build mode when `largeBuild.enabled` is true and the graph has
+**at least `largeBuild.minWorkstreams` workstreams and at least `largeBuild.minNodes`
+writing nodes**. Below either, stay in plain implement. An explicit "large build" request
+switches regardless of the threshold, and an explicit "don't" keeps plain implement. If
+`largeBuild.enabled` is false, an explicit request still wins: flag it once and go on.
+
+Large build never fires for read-only workflows, debug, or optimize. When it fires, run
+`workflows/large-build.md` instead of `workflows/implement.md` in Step 3.
+
 Collapse the graph when it's trivial: a single node, or a straight chain of small edits, is
 just sequential work — don't build ceremony around it. Read-only workflows (research,
 design, review, debug hypotheses) usually produce a flat graph of independent legs; the
@@ -179,7 +204,8 @@ graph matters most for **implement** and **optimize**, where nodes write.
 
 Read this package's `skills/orchestrate/workflows/<workflow>.md` and follow it. Each
 recipe specifies its prelude, its fan-out (which role, how many, what each does), and its
-convergence. It also lists the flavors that ride on it and which stages they toggle.
+convergence. It also lists the flavors that ride on it and which stages they toggle. In
+large-build mode (Step 2b) the recipe is `workflows/large-build.md`.
 
 ## Step 4 — Announce, then act per `autonomy`
 
@@ -194,6 +220,9 @@ critical path, e.g. `wave 0: contract → wave 1: api, ui → wave 2: e2e`.
 - **`auto`**: run immediately.
 - **`threshold`**: run immediately only if `parallel legs <= threshold.maxParallelAuto`
   **and** `files touched <= threshold.maxFilesAuto`; otherwise fall back to `propose`.
+
+When Step 2b switched to large build **on its own** (no explicit ask), always propose
+first, whatever `autonomy` says: the user should see the bigger run before it starts.
 
 **Approval and the script grant.** This skill pre-approves its worktree script
 (`allowed-tools`) only for the turn that invokes the skill; the grant clears when the user
@@ -341,7 +370,8 @@ checkouts behind. `status` lists anything left over; `cleanup --all` sweeps ever
 
 ## Arguments
 
-- `go <run>` — the user approved the announced plan for `<run>`; execute it from Step 5.
+- `go <run>` — the user approved the announced plan for `<run>`; execute it from Step 5. For
+  a large-build run with an existing status file, resume from it (`large-build.md`).
 - `cleanup <run>` (or `cleanup --all`) — run Step 8 only and report what was removed/kept.
 - anything else — the task to orchestrate.
 

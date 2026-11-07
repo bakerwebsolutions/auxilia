@@ -97,6 +97,7 @@ for that run — fable fully replaces opus at the top tier; builder and scout ar
 - **research** (synthesized info) · **design** (an option to choose) · **implement** (a spec satisfied)
 - **debug** (a repro stops failing) · **review** (judgment of existing code) · **optimize** (a measurement improves)
 - Flavors ride on a base: refactor/test/docs/small-migration → implement; security-audit → review.
+- **Large build** is a scale mode of implement (an explicit ask, or several independent workstreams): a manager owns the plan, merge order and a decision ledger; two or three leads run the workstreams; leads escalate spec, contract, behavior, cost and vendor calls instead of deciding them.
 
 Every workflow has the same spine: a **sequential prelude** that produces the one shared
 artifact (contract / repro / rubric / baseline / context pack) which *unblocks* a **parallel

@@ -76,6 +76,31 @@ worth changing, and its worktree is discarded instead of being padded with a cos
 tweak. `BLOCKED` means its node check still failed after one correction pass, and the work
 stays out of the branch.
 
+## Large build
+
+For big multi-workstream builds (many MRs, a feature spanning backend and UI, a long
+autonomous run), implement runs as **large build**
+([`workflows/large-build.md`](skills/orchestrate/workflows/large-build.md)):
+
+- A **manager** (the orchestrator) owns the plan, the merge order, MR boundaries and a
+  **decision ledger** — one file, the only place design calls are written. Each entry says
+  who decided; anything an agent decided reads "agent decision, not reviewed by the user".
+  At the end the manager lists the unreviewed entries for you to confirm or reject.
+- **Two or three workstream leads** (the senior tier by default) each own one area and run
+  its builders and verifiers in per-node worktrees. Leads hand gated nodes up; only the
+  manager merges.
+- **Escalation:** a lead never decides anything that changes a spec, a contract, product
+  behavior, cost or a vendor. It sends the question up; the manager decides and logs it, or
+  stops and asks you when it's your call (cost, vendor, product direction).
+- **Checkpoints:** plan and contract ready, each MR/PR green, blocked on you, and the final
+  report. A short status file lets a resumed or replacement manager continue.
+
+It fires on an explicit "large build" request, or when an implement graph splits into at
+least `largeBuild.minWorkstreams` independent workstreams with at least
+`largeBuild.minNodes` writing nodes; an auto-picked large build always proposes before it
+runs. Force it or rule it out with `/orchestrate-workflows` ("run this as a large build",
+"force implement").
+
 ## Roles, not fixed model names
 
 Work routes to **four roles**; config maps roles → models.
@@ -86,6 +111,9 @@ Work routes to **four roles**; config maps roles → models.
 | **senior** | implement work-graph nodes classified hard | profile `senior`, else the profile's top tier | writes |
 | **builder** | implement code · write prose · run tests | harness profile | writes |
 | **scout** | search · locate · map · external research | harness profile | read-only |
+
+Large build adds **manager** (`roles.manager`, default the orchestrator) and **lead**
+(`roles.lead`, default the senior role).
 
 **The runtime chooses the tier names.** A role begins with the profile for the running
 harness, then an explicit config or natural-language override wins for that run. The router
@@ -157,7 +185,8 @@ wins per key), so your user config sets global defaults and a repo overrides spe
 {
   "autonomy": "propose",
   "harness": "auto",
-  "roles": { "orchestrator": "auto", "senior": "auto", "builder": "auto", "scout": "auto" },
+  "roles": { "orchestrator": "auto", "senior": "auto", "builder": "auto", "scout": "auto",
+             "manager": "auto", "lead": "auto" },
   "harnessProfiles": {
     "claude": { "roles": { "orchestrator": "opus", "builder": "sonnet", "scout": "haiku" } },
     "codex": { "roles": { "orchestrator": "gpt-5.6-sol", "builder": "gpt-5.6-terra", "scout": "gpt-5.6-luna" } }
@@ -172,6 +201,11 @@ wins per key), so your user config sets global defaults and a repo overrides spe
   },
   "worktrees": { "mode": "auto", "cleanup": "on-success", "link": [] },
   "escalation": { "scoutToBuilder": true, "builderToSenior": true },
+  "largeBuild": {
+    "enabled": true, "minWorkstreams": 2, "minNodes": 8, "maxLeads": 3, "maxParallel": 6,
+    "ledger": ".orchestrate/runs/<run>/decisions.md",
+    "status": ".orchestrate/runs/<run>/status.md"
+  },
   "doctrine": "standard",
   "alwaysPassModelExplicitly": true
 }
@@ -192,6 +226,12 @@ wins per key), so your user config sets global defaults and a repo overrides spe
 | `worktrees.setup` | command | Run in each new worktree before its builder starts, under normal permissions. |
 | `escalation.scoutToBuilder` | bool | Re-run a thin/low-confidence scout leg at the builder tier before giving up (cascade). |
 | `escalation.builderToSenior` | bool | Re-run a builder node that failed its check (or hit a contract gap) once at the senior tier. |
+| `roles.manager` / `lead` | `auto` or model alias/ID | Large-build roles. `manager: auto` = the orchestrator; `lead: auto` = the senior role. |
+| `largeBuild.enabled` | bool | Whether the router may switch an implement run to large build on its own (an explicit request works either way). |
+| `largeBuild.minWorkstreams` / `minNodes` | int | Auto-switch threshold: both must be met (default 2 workstreams, 8 writing nodes). |
+| `largeBuild.maxLeads` | int ≥ 2 | Cap on workstream leads (default 3). |
+| `largeBuild.maxParallel` | int | Cap on concurrent builders + verifiers across all leads (default 6). |
+| `largeBuild.ledger` / `status` | path with `<run>` | Decision ledger and status file, relative to the main checkout (default under the git-excluded `.orchestrate/runs/<run>/`). |
 | `threshold.maxParallelAuto` / `maxFilesAuto` | int | Limits used when `autonomy=threshold`. |
 | `doctrine` | `off` · `standard` · `strict` | How forcefully the `SessionStart` hook injects the doctrine (`off` disables it). |
 | `alwaysPassModelExplicitly` | bool | Tell the orchestrator to pass a validated model override whenever its harness supports explicit model selection. |

@@ -73,6 +73,11 @@ contract drift between units, reports what changed per file, and runs `cleanup <
   pass. Large or novel
   migrations should go through `design` first, not straight here.
 
+**Large build** is not a flavor: when the graph splits into several independent workstreams
+over the `largeBuild` threshold, or the user asks for one, the router runs
+[`large-build.md`](large-build.md) instead — a manager, two or three workstream leads, and a
+decision ledger (router Step 2b).
+
 ## Notes
 
 - Collapse trivial units — don't spawn an agent for a one-line edit you can do inline.

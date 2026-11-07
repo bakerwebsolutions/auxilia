@@ -1,6 +1,6 @@
 ---
 name: orchestrate-workflows
-description: Companion to /orchestrate — run a specific workflow directly (bypassing the router's classification), inspect or edit the layered config, or dry-run "what would the router pick" for a prompt. Use when the user says "run the review workflow", "force implement", "show my orchestrate config", "use Astra to orchestrate", "edit the orchestrate config", or "what workflow would this be".
+description: Companion to /orchestrate — run a specific workflow directly (bypassing the router's classification), inspect or edit the layered config, or dry-run "what would the router pick" for a prompt. Use when the user says "run the review workflow", "force implement", "run this as a large build", "show my orchestrate config", "use Astra to orchestrate", "edit the orchestrate config", or "what workflow would this be".
 allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/skills/orchestrate/scripts/worktree.sh *)
 ---
 
@@ -42,6 +42,13 @@ diff", "force debug"). This **skips classification** — the user has already ch
    `${CLAUDE_PLUGIN_ROOT}/skills/orchestrate/scripts/worktree.sh`. Honor a natural-language role
    override only when the active harness advertises that model.
 
+**Forcing large build.** "Run this as a large build" (or "large-build this", "force large
+build") runs `workflows/large-build.md`: build the implement graph, skip the router's
+Step 2b threshold check, and go straight to the manager/lead recipe. "Force implement" or
+"no large build" does the opposite and keeps plain implement even over the threshold. If
+`largeBuild.enabled` is false, flag it once and honor the request. Under any `autonomy`, the
+large-build plan is checkpoint 1 of its recipe; follow `autonomy` for whether to wait.
+
 ## Mode B — Manage the config
 
 Use for "show my config", "use Astra to orchestrate", "bump implement's maxParallel",
@@ -73,6 +80,11 @@ Common edits and where they land:
 | "don't use worktrees" / "always use worktrees" | `worktrees.mode: "off"` / `"always"` |
 | "throw away failed worktrees too" | `worktrees.cleanup: "always"` |
 | "builders can't run tests in worktrees" | `worktrees.link: ["node_modules", …]` and/or `worktrees.setup: "<install cmd>"` |
+| "never switch to large build on its own" | `largeBuild.enabled: false` |
+| "large build only for bigger graphs" | `largeBuild.minWorkstreams` / `largeBuild.minNodes` |
+| "only two leads" | `largeBuild.maxLeads: 2` |
+| "run leads on a different model" | `roles.lead` (or `roles.manager` for the manager) |
+| "keep the decision ledger in the repo" | `largeBuild.ledger: "docs/decisions/<run>.md"` |
 
 ## Mode C — Explain / dry-run
 
@@ -82,7 +94,8 @@ Use for "what workflow would this be", "which tier handles X", "explain the rout
 1. Load the merged config.
 2. Apply the router's Step 1 classification to the user's described task: name the
    **workflow**, the **oracle** that decided it (not just the keyword), and the runner-up if
-   it was close.
+   it was close. For implement, say whether Step 2b would switch to large build: the
+   workstream and writing-node counts against `largeBuild.minWorkstreams` / `minNodes`.
 3. Sketch the plan the recipe would produce: the **prelude** (shared unblock), the **work
    graph** (nodes, `needs` edges, waves, critical path, which nodes get worktrees), and the
    **convergence** — without spawning agents or creating worktrees.

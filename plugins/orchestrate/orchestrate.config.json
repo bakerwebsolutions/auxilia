@@ -10,7 +10,9 @@
     "orchestrator": "auto",
     "senior": "auto",
     "builder": "auto",
-    "scout": "auto"
+    "scout": "auto",
+    "manager": "auto",
+    "lead": "auto"
   },
   "harnessProfiles": {
     "claude": {
@@ -36,6 +38,15 @@
   "escalation": {
     "scoutToBuilder": true,
     "builderToSenior": true
+  },
+  "largeBuild": {
+    "enabled": true,
+    "minWorkstreams": 2,
+    "minNodes": 8,
+    "maxLeads": 3,
+    "maxParallel": 6,
+    "ledger": ".orchestrate/runs/<run>/decisions.md",
+    "status": ".orchestrate/runs/<run>/status.md"
   },
   "doctrine": "standard",
   "alwaysPassModelExplicitly": true

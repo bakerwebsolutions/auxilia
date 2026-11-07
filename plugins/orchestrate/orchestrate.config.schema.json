@@ -37,7 +37,17 @@
           "default": "auto"
         },
         "builder": { "type": "string", "default": "auto" },
-        "scout": { "type": "string", "default": "auto" }
+        "scout": { "type": "string", "default": "auto" },
+        "manager": {
+          "description": "Large-build manager: owns the plan, merge order and decision ledger. auto = the resolved orchestrator role (this session). Another advertised model spawns one manager agent at that model.",
+          "type": "string",
+          "default": "auto"
+        },
+        "lead": {
+          "description": "Large-build workstream lead: runs one workstream's builders and verifiers. auto = the resolved senior role (the profile's top tier unless senior is set).",
+          "type": "string",
+          "default": "auto"
+        }
       }
     },
     "harnessProfiles": {
@@ -102,6 +112,52 @@
         }
       }
     },
+    "largeBuild": {
+      "description": "Large-build mode: an implement run managed in workstreams, with a manager, two or three leads, a decision ledger and checkpoints. See skills/orchestrate/workflows/large-build.md.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "description": "Whether the router may switch an implement run to large-build on its own. An explicit \"large build\" request is honored either way.",
+          "type": "boolean",
+          "default": true
+        },
+        "minWorkstreams": {
+          "description": "Auto-switch only when the work graph, minus its contract node(s), splits into at least this many independent workstreams.",
+          "type": "integer",
+          "minimum": 2,
+          "default": 2
+        },
+        "minNodes": {
+          "description": "Auto-switch only when the work graph also has at least this many writing nodes.",
+          "type": "integer",
+          "minimum": 2,
+          "default": 8
+        },
+        "maxLeads": {
+          "description": "Cap on workstream leads. Workstreams beyond it are grouped so each lead owns one area.",
+          "type": "integer",
+          "minimum": 2,
+          "default": 3
+        },
+        "maxParallel": {
+          "description": "Cap on concurrent builders and verifiers across all leads. Each lead is also capped at workflows.implement.maxParallel.",
+          "type": "integer",
+          "minimum": 1,
+          "default": 6
+        },
+        "ledger": {
+          "description": "Decision ledger path, relative to the main checkout; <run> is replaced by the run id. The only place design calls are written; only the manager writes it.",
+          "type": "string",
+          "default": ".orchestrate/runs/<run>/decisions.md"
+        },
+        "status": {
+          "description": "Status file path, relative to the main checkout; <run> is replaced by the run id. Rewritten at every checkpoint so a resumed or replacement manager can continue.",
+          "type": "string",
+          "default": ".orchestrate/runs/<run>/status.md"
+        }
+      }
+    },
     "doctrine": {
       "description": "How forcefully the SessionStart hook injects the delegation doctrine. off = no injection; standard = inject as guidance; strict = inject as a hard rule.",
       "enum": ["off", "standard", "strict"],
@@ -144,7 +200,9 @@
             "orchestrator": { "type": "string" },
             "senior": { "type": "string" },
             "builder": { "type": "string" },
-            "scout": { "type": "string" }
+            "scout": { "type": "string" },
+            "manager": { "type": "string" },
+            "lead": { "type": "string" }
           }
         }
       }
