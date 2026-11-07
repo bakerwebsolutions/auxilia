@@ -63,7 +63,9 @@ Common edits and where they land:
 | Ask | Key |
 |-----|-----|
 | "use a model to orchestrate everywhere" | `roles.orchestrator: "<supported model>"` (user layer) |
-| "retier a role" | `roles.{builder,scout}` or `harnessProfiles.<harness>.roles.*` |
+| "retier a role" | `roles.{senior,builder,scout}` or `harnessProfiles.<harness>.roles.*` |
+| "allow more hard nodes on the top tier" | `workflows.<name>.maxSenior` |
+| "don't escalate failed builders" | `escalation.builderToSenior: false` |
 | "enable/disable a workflow" | `workflows.<name>.enabled` |
 | "allow more parallel agents" | `workflows.<name>.maxParallel` |
 | "just run it, don't ask" | `autonomy: "auto"` |
@@ -83,7 +85,8 @@ Use for "what workflow would this be", "which tier handles X", "explain the rout
 3. Sketch the plan the recipe would produce: the **prelude** (shared unblock), the **work
    graph** (nodes, `needs` edges, waves, critical path, which nodes get worktrees), and the
    **convergence** — without spawning agents or creating worktrees.
-4. Note the effective roles (including any top-tier model override) and the `maxParallel` cap that would
+4. Note the effective roles (including any top-tier model override and which nodes would
+   run at the senior tier, with why) and the `maxParallel` cap that would
    apply.
 
 ## Notes

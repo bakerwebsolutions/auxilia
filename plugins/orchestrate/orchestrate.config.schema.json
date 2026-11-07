@@ -26,11 +26,16 @@
       }
     },
     "roles": {
-      "description": "Explicit model overrides for the three roles. auto takes the role from the active harness profile. Use only model IDs or aliases supported by the running harness.",
+      "description": "Explicit model overrides for the roles. auto takes the role from the active harness profile. Use only model IDs or aliases supported by the running harness.",
       "type": "object",
       "additionalProperties": false,
       "properties": {
         "orchestrator": { "type": "string", "default": "auto" },
+        "senior": {
+          "description": "Builder for work-graph nodes classified as hard. auto resolves to harnessProfiles.<harness>.roles.senior, else that profile's top tier (its orchestrator model) — so it is always a stronger model than the builder without naming one.",
+          "type": "string",
+          "default": "auto"
+        },
         "builder": { "type": "string", "default": "auto" },
         "scout": { "type": "string", "default": "auto" }
       }
@@ -75,11 +80,16 @@
       }
     },
     "escalation": {
-      "description": "Cascade behavior. When a scout (Haiku) returns thin or low-confidence output on a leg, re-run that one leg at the builder tier before giving up.",
+      "description": "Cascade behavior: re-run a single failed or thin leg one tier up before giving up.",
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "scoutToBuilder": { "type": "boolean", "default": true }
+        "scoutToBuilder": { "type": "boolean", "default": true },
+        "builderToSenior": {
+          "description": "When a builder-tier node fails verification or reports the contract is insufficient, re-run that one node once at the senior tier in a fresh worktree. Does not count against maxSenior.",
+          "type": "boolean",
+          "default": true
+        }
       }
     },
     "doctrine": {
@@ -104,6 +114,12 @@
           "type": "integer",
           "minimum": 1,
           "default": 4
+        },
+        "maxSenior": {
+          "description": "Cap on work-graph nodes classified to the senior tier per run (escalations excluded). Needing more usually means the prelude contract is unfinished.",
+          "type": "integer",
+          "minimum": 0,
+          "default": 1
         }
       }
     },
@@ -116,6 +132,7 @@
           "additionalProperties": false,
           "properties": {
             "orchestrator": { "type": "string" },
+            "senior": { "type": "string" },
             "builder": { "type": "string" },
             "scout": { "type": "string" }
           }
