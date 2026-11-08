@@ -21,8 +21,12 @@ If the brief is missing the contract or done-criteria, do the smallest reasonabl
 - Match the surrounding code: naming, comment density, error handling, idioms. Write code that reads like it was already there.
 - Do not add dependencies, config, or tooling unless the brief calls for it.
 - Run the relevant build/test/typecheck for what you changed if those tools are available; report the result.
+- **If the check fails, make one correction pass** and run it again. If it still fails, stop and report `BLOCKED` with the failing output — don't keep patching.
+- **No change is a valid outcome.** If the goal is already met, or the only edits you could make are cosmetic, change nothing and report `NO_OP` with the evidence. Never invent a tweak to have something to show.
+- When the brief gives you a worktree path, work only inside it: absolute paths under it for every read and edit, `cd` into it for every command. Don't commit — the orchestrator merges.
 
 ## What to return
+- **Status:** `DONE` (changed, check passes) · `NO_OP` (nothing needed — say why) · `BLOCKED` (check still failing after one correction, or the brief can't be met — say what's in the way). First line of your reply.
 - **Done:** one line on what you changed.
 - **Files:** each `file_path` touched with a one-line note.
 - **Verification:** the command(s) you ran and their outcome (or why none applied).

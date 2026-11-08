@@ -47,11 +47,18 @@ resolve_role() { # resolve_role <role> <claude-default>
   local role="$1" def="$2" explicit profile
   explicit="$(read_key "roles.${role}" auto)"
   profile="$(read_key "harnessProfiles.claude.roles.${role}" "$def")"
+  # The no-jq fallback reader matches by leaf name, so it can hand back roles.<role>'s "auto".
+  [ "$profile" = "auto" ] && profile="$def"
   [ "$explicit" = "auto" ] && printf '%s' "$profile" || printf '%s' "$explicit"
 }
 
 ORCHESTRATOR="$(resolve_role orchestrator opus)"
 BUILDER="$(resolve_role builder sonnet)"
+# senior: explicit role, else the profile's senior, else the profile's top tier
+# (the profile's orchestrator, not an explicit orchestrator override).
+PROFILE_TOP="$(read_key harnessProfiles.claude.roles.orchestrator opus)"
+[ "$PROFILE_TOP" = "auto" ] && PROFILE_TOP="opus"
+SENIOR="$(resolve_role senior "$PROFILE_TOP")"
 SCOUT="$(resolve_role scout haiku)"
 MAX_PARALLEL="$(read_key threshold.maxParallelAuto 3)"
 MAX_FILES="$(read_key threshold.maxFilesAuto 5)"
@@ -79,6 +86,7 @@ and run the matching pre-curated workflow, delegating hands-on work down the mod
 
 **Roles** (model per role, from config):
 - **orchestrator → \`${ORCHESTRATOR}\`** — you: classify, reason on the shared prelude, judge/verify adversarially, synthesize. Keep the hard thinking here.
+- **senior → \`${SENIOR}\`** — implement work-graph nodes classified hard (blockers, concurrency/auth/migrations, novel logic, contract gaps); same \`implementer\` agent, stronger model. A failed builder node escalates here once.
 - **builder → \`${BUILDER}\`** — implement code, write prose, run tests (\`implementer\` / \`verifier\` subagents).
 - **scout → \`${SCOUT}\`** — search, locate, map, external research; read-only (\`explorer\` / \`researcher\` subagents).
 
@@ -89,6 +97,7 @@ for that run — fable fully replaces opus at the top tier; builder and scout ar
 - **research** (synthesized info) · **design** (an option to choose) · **implement** (a spec satisfied)
 - **debug** (a repro stops failing) · **review** (judgment of existing code) · **optimize** (a measurement improves)
 - Flavors ride on a base: refactor/test/docs/small-migration → implement; security-audit → review.
+- **Large build** is a scale mode of implement (an explicit ask, or several independent workstreams): a manager owns the plan, merge order and a decision ledger; two or three leads run the workstreams; leads escalate spec, contract, behavior, cost and vendor calls instead of deciding them.
 
 Every workflow has the same spine: a **sequential prelude** that produces the one shared
 artifact (contract / repro / rubric / baseline / context pack) which *unblocks* a **parallel

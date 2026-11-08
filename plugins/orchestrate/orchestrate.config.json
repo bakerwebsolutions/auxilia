@@ -8,8 +8,11 @@
   },
   "roles": {
     "orchestrator": "auto",
+    "senior": "auto",
     "builder": "auto",
-    "scout": "auto"
+    "scout": "auto",
+    "manager": "auto",
+    "lead": "auto"
   },
   "harnessProfiles": {
     "claude": {
@@ -22,17 +25,29 @@
   "workflows": {
     "research":  { "enabled": true,  "maxParallel": 4 },
     "design":    { "enabled": true,  "maxParallel": 3 },
-    "implement": { "enabled": true,  "maxParallel": 3 },
+    "implement": { "enabled": true,  "maxParallel": 3, "maxSenior": 1 },
     "debug":     { "enabled": true,  "maxParallel": 4 },
     "review":    { "enabled": true,  "maxParallel": 4 },
     "optimize":  { "enabled": false, "maxParallel": 3 }
   },
   "worktrees": {
     "mode": "auto",
-    "cleanup": "on-success"
+    "cleanup": "on-success",
+    "link": []
   },
   "escalation": {
-    "scoutToBuilder": true
+    "scoutToBuilder": true,
+    "builderToSenior": true
+  },
+  "largeBuild": {
+    "enabled": true,
+    "minWorkstreams": 2,
+    "minNodes": 8,
+    "maxLeads": 3,
+    "maxParallel": 6,
+    "ledger": ".orchestrate/runs/<run>/decisions.md",
+    "projectLog": "auto",
+    "status": ".orchestrate/runs/<run>/status.md"
   },
   "doctrine": "standard",
   "alwaysPassModelExplicitly": true

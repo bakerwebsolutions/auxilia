@@ -16,6 +16,14 @@ The shipped profile expresses a policy, not an availability claim:
 - builder: `gpt-5.6-terra`
 - scout: `gpt-5.6-luna`
 
+Senior nodes (hard work-graph nodes) reuse `implementer` with the model overridden at spawn
+time. With no `senior` entry in the profile, that is the profile's top tier (`gpt-5.6-sol`);
+set `harnessProfiles.codex.roles.senior` to pick a different step up from Terra.
+
+Large-build leads (`workflows/large-build.md`) spawn their own builders, which needs nested
+`spawn_agent`. If the session's agent depth limit doesn't allow it, the recipe runs leads as
+planning leads and the manager spawns the builders they name.
+
 Override `harnessProfiles.codex` or individual `roles` in a project config only after
 confirming the model is available in that Codex runtime.
 

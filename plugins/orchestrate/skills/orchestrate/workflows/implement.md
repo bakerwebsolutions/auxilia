@@ -11,8 +11,10 @@ parallel build against it, then verify.
 **Route here when:** "add", "build", "implement", "make it do X", or a refactor/test/docs/
 migrate ask — success is judged by whether the change satisfies a spec, not by information
 returned or an option chosen.
-**Roles:** orchestrator (contract + synthesis) · builder (the units) · builder (verify)
-**Cap:** parallel builders ≤ `workflows.implement.maxParallel`.
+**Roles:** orchestrator (contract + synthesis) · builder (the units) · senior (hard units) ·
+builder (verify)
+**Cap:** parallel builders ≤ `workflows.implement.maxParallel`; senior nodes ≤
+`workflows.implement.maxSenior`.
 
 ## Prelude (sequential — the shared unblock)
 
@@ -21,7 +23,9 @@ don't already know the terrain. Then write the **shared contract**: the interfac
 function signatures, types, and data shapes the parallel units will build against. Then turn
 the units into the **work graph** (router Step 2): each unit is a node with the files it
 `owns` and the nodes it `needs`. The contract itself is the root node — the blocker
-everything else waits on.
+everything else waits on. Then classify each node's tier (router Step 2): most units are
+routine work against the contract and stay `builder`; reserve `senior` for the few that
+meet the router's criteria.
 
 The contract *is* the artifact that unblocks fan-out: once the interface between pieces is
 nailed down, the pieces can be built in parallel without colliding. If you can't write the
@@ -29,19 +33,25 @@ contract yet, the work isn't ready to fan out — keep reasoning, don't fan out 
 
 ## Fan-out (parallel — builder, wave by wave)
 
-One builder per ready node, capped at `workflows.implement.maxParallel`. Each writing node
+One builder per ready node, capped at `workflows.implement.maxParallel`, each spawned at its
+node's tier (`builder` or `senior`). Each writing node
 runs in its own worktree (router Step 5). Each brief is the 4-part contract (Objective /
 Output format / Tools-sources / Boundaries) **plus**:
 
 - the shared interface it must satisfy (from the prelude)
 - the in-scope files it may touch (its `owns`)
 - its worktree path as the working root, and "don't commit"
+- its node check (the narrowest test/typecheck covering what it owns) and that `NO_OP` is
+  an acceptable answer
 
-Launch every ready node **in one message**. When a node finishes, `merge` it, `remove` its
-worktree, and start any node whose `needs` are now all merged — folding the prerequisite's
+Launch every ready node **in one message**. When a node finishes, gate on its status
+(router Step 5): merge `DONE`, discard `NO_OP` (and question it if the graph expected a
+change), hold `BLOCKED` out of the branch. Then `remove` its worktree and start any node
+whose `needs` are now all merged — folding the prerequisite's
 result into that node's brief. Each builder implements to the contract, matches surrounding
-style, and runs the local check for what it changed (its own tests/lint, not the full
-suite).
+style, and runs its node check — its own tests/lint, not the full suite — with one
+correction pass if it fails. A builder node still failing its check, or reporting a contract
+gap, escalates once to `senior` (`escalation.builderToSenior`) before it counts as `BLOCKED`.
 
 ## Converge (sequential — verify)
 
@@ -62,6 +72,11 @@ contract drift between units, reports what changed per file, and runs `cleanup <
   file/module (parallel-per-unit, each in its worktree), a verifier does the integration
   pass. Large or novel
   migrations should go through `design` first, not straight here.
+
+**Large build** is not a flavor: when the graph splits into several independent workstreams
+over the `largeBuild` threshold, or the user asks for one, the router runs
+[`large-build.md`](large-build.md) instead — a manager, two or three workstream leads, and a
+decision ledger (router Step 2b).
 
 ## Notes
 

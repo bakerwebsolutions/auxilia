@@ -26,13 +26,28 @@
       }
     },
     "roles": {
-      "description": "Explicit model overrides for the three roles. auto takes the role from the active harness profile. Use only model IDs or aliases supported by the running harness.",
+      "description": "Explicit model overrides for the roles. auto takes the role from the active harness profile. Use only model IDs or aliases supported by the running harness.",
       "type": "object",
       "additionalProperties": false,
       "properties": {
         "orchestrator": { "type": "string", "default": "auto" },
+        "senior": {
+          "description": "Builder for work-graph nodes classified as hard. auto resolves to harnessProfiles.<harness>.roles.senior, else that profile's top tier (its orchestrator model) — so it is always a stronger model than the builder without naming one.",
+          "type": "string",
+          "default": "auto"
+        },
         "builder": { "type": "string", "default": "auto" },
-        "scout": { "type": "string", "default": "auto" }
+        "scout": { "type": "string", "default": "auto" },
+        "manager": {
+          "description": "Large-build manager: owns the plan, merge order and decision ledger. auto = the resolved orchestrator role (this session). Another advertised model spawns one manager agent at that model.",
+          "type": "string",
+          "default": "auto"
+        },
+        "lead": {
+          "description": "Large-build workstream lead: runs one workstream's builders and verifiers. auto = the resolved senior role (the profile's top tier unless senior is set).",
+          "type": "string",
+          "default": "auto"
+        }
       }
     },
     "harnessProfiles": {
@@ -71,15 +86,81 @@
           "description": "on-success = remove merged worktrees and keep any with unmerged or uncommitted work for inspection; always = force-remove every worktree of the run at the end, discarding unmerged work.",
           "enum": ["on-success", "always"],
           "default": "on-success"
+        },
+        "link": {
+          "description": "Gitignored paths (relative to the repo root) symlinked from the main checkout into each new worktree so nodes can build and test, e.g. [\"node_modules\", \".venv\", \".env\"]. Shared, not copied: nodes must not install packages through them.",
+          "type": "array",
+          "items": { "type": "string", "pattern": "^[^/].*" },
+          "default": []
+        },
+        "setup": {
+          "description": "Optional command run inside each new worktree before its builder starts (e.g. \"npm ci\"). Runs as an ordinary command under normal permissions, never through the pre-approved worktree script.",
+          "type": "string"
         }
       }
     },
     "escalation": {
-      "description": "Cascade behavior. When a scout (Haiku) returns thin or low-confidence output on a leg, re-run that one leg at the builder tier before giving up.",
+      "description": "Cascade behavior: re-run a single failed or thin leg one tier up before giving up.",
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "scoutToBuilder": { "type": "boolean", "default": true }
+        "scoutToBuilder": { "type": "boolean", "default": true },
+        "builderToSenior": {
+          "description": "When a builder-tier node fails verification or reports the contract is insufficient, re-run that one node once at the senior tier in a fresh worktree. Does not count against maxSenior.",
+          "type": "boolean",
+          "default": true
+        }
+      }
+    },
+    "largeBuild": {
+      "description": "Large-build mode: an implement run managed in workstreams, with a manager, two or three leads, a decision ledger and checkpoints. See skills/orchestrate/workflows/large-build.md.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "description": "Whether the router may switch an implement run to large-build on its own. An explicit \"large build\" request is honored either way.",
+          "type": "boolean",
+          "default": true
+        },
+        "minWorkstreams": {
+          "description": "Auto-switch only when the work graph, minus its contract node(s), splits into at least this many independent workstreams.",
+          "type": "integer",
+          "minimum": 2,
+          "default": 2
+        },
+        "minNodes": {
+          "description": "Auto-switch only when the work graph also has at least this many writing nodes.",
+          "type": "integer",
+          "minimum": 2,
+          "default": 8
+        },
+        "maxLeads": {
+          "description": "Cap on workstream leads. Workstreams beyond it are grouped so each lead owns one area.",
+          "type": "integer",
+          "minimum": 2,
+          "default": 3
+        },
+        "maxParallel": {
+          "description": "Cap on concurrent builders and verifiers across all leads. Each lead is also capped at workflows.implement.maxParallel.",
+          "type": "integer",
+          "minimum": 1,
+          "default": 6
+        },
+        "ledger": {
+          "description": "Decision ledger path, relative to the main checkout; <run> is replaced by the run id. The only place design calls are written; only the manager writes it.",
+          "type": "string",
+          "default": ".orchestrate/runs/<run>/decisions.md"
+        },
+        "projectLog": {
+          "description": "Where durable decisions (behavior, spec/contract, money, cost, vendor, data shape) are also written. auto = detect the project's decision log (named in CLAUDE.md/AGENTS.md, decision-log.md, DECISIONS.md, an ADR directory); a path = that file or ADR directory, relative to the main checkout; none = no project log, copy them into the MR/PR description and the final report.",
+          "type": "string",
+          "default": "auto"
+        },
+        "status": {
+          "description": "Status file path, relative to the main checkout; <run> is replaced by the run id. Rewritten at every checkpoint so a resumed or replacement manager can continue.",
+          "type": "string",
+          "default": ".orchestrate/runs/<run>/status.md"
+        }
       }
     },
     "doctrine": {
@@ -104,6 +185,12 @@
           "type": "integer",
           "minimum": 1,
           "default": 4
+        },
+        "maxSenior": {
+          "description": "Cap on work-graph nodes classified to the senior tier per run (escalations excluded). Needing more usually means the prelude contract is unfinished.",
+          "type": "integer",
+          "minimum": 0,
+          "default": 1
         }
       }
     },
@@ -116,8 +203,11 @@
           "additionalProperties": false,
           "properties": {
             "orchestrator": { "type": "string" },
+            "senior": { "type": "string" },
             "builder": { "type": "string" },
-            "scout": { "type": "string" }
+            "scout": { "type": "string" },
+            "manager": { "type": "string" },
+            "lead": { "type": "string" }
           }
         }
       }

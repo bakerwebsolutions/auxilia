@@ -1,6 +1,6 @@
 ---
 name: orchestrate
-description: Route a task to a pre-curated, role-tiered workflow and run it. Use when the user says "orchestrate", "decompose", "delegate this", "parallelize", "fan out", or hands you a multi-part task. Detects the task type (research · design · implement · debug · review · optimize), then runs that workflow's recipe — a shared sequential prelude, a parallel fan-out, and a convergence step. Resolve models from the active harness before delegating. Decomposes work into a dependency graph and isolates parallel writers in git worktrees.
+description: Route a task to a pre-curated, role-tiered workflow and run it. Use when the user says "orchestrate", "decompose", "delegate this", "parallelize", "fan out", or hands you a multi-part task. Detects the task type (research · design · implement · debug · review · optimize), then runs that workflow's recipe — a shared sequential prelude, a parallel fan-out, and a convergence step. Resolve models from the active harness before delegating. Decomposes work into a dependency graph and isolates parallel writers in git worktrees. Large multi-workstream builds ("large build") run under a manager with workstream leads and a decision ledger.
 argument-hint: "[task]  |  go <run>  |  cleanup <run>"
 allowed-tools: Bash(${CLAUDE_SKILL_DIR}/scripts/worktree.sh *)
 ---
@@ -24,16 +24,18 @@ repo overrides specifics:
 2. The active harness's user-level config location
 3. The installed package's `orchestrate.config.json` (shipped default)
 
-Keys you act on: `roles.{orchestrator,builder,scout}`, `autonomy`, `threshold.*`,
-`workflows.<name>.{enabled,maxParallel}`, `escalation.scoutToBuilder`,
-`worktrees.{mode,cleanup}`,
+Keys you act on: `roles.{orchestrator,senior,builder,scout,manager,lead}`, `autonomy`,
+`threshold.*`, `workflows.<name>.{enabled,maxParallel,maxSenior}`,
+`escalation.{scoutToBuilder,builderToSenior}`, `worktrees.{mode,cleanup,link,setup}`,
+`largeBuild.{enabled,minWorkstreams,minNodes,maxLeads,maxParallel,ledger,projectLog,status}`,
 `harness`, `harnessProfiles`, and `alwaysPassModelExplicitly`. Defaults if no file: detect
 the harness from its available delegation tool, use its profile, and inherit a role when no
 supported model can be established. Never pass a Claude alias to Codex or a Codex model ID
 to Claude.
 `autonomy=propose`, all workflows except `optimize` enabled, pass model explicitly,
 `worktrees.mode=auto` (worktrees whenever two or more writing nodes run concurrently),
-`worktrees.cleanup=on-success`.
+`worktrees.cleanup=on-success`, `worktrees.link=[]`, no `worktrees.setup`, and large-build
+auto-routing on at 2 workstreams and 8 writing nodes, 3 leads at most.
 
 ## Resolve harness and roles before delegation
 
@@ -46,20 +48,31 @@ Set the harness in this precedence order:
    default (or stay single-agent if delegation is unavailable).
 
 Resolve each role by taking an explicit non-`auto` `roles.<role>` value, otherwise the
-selected `harnessProfiles.<harness>.roles.<role>` value. Before passing it, verify the value
-is in the runtime's advertised model choices. If it is absent, omit the model parameter;
+selected `harnessProfiles.<harness>.roles.<role>` value. **`senior`** has one extra
+fallback: if neither is set, it takes the profile's top tier
+(`harnessProfiles.<harness>.roles.orchestrator` — not a per-run orchestrator override). So
+"senior" always means *the strongest model this harness profile offers*, without the router
+or any recipe naming one. Before passing it, verify the value
+is in the runtime's advertised model choices. The large-build roles fall back the same way:
+**`manager`** to the resolved `orchestrator` (this session), **`lead`** to the resolved
+`senior`. If it is absent, omit the model parameter;
 the harness default is safer than a stale profile. The active primary model is context, not
 a reliable model catalog.
 
 ## The roles
 
-Everything routes to **four roles**, not four fixed model names. The config maps roles → models.
+Everything routes to **four roles**, not fixed model names. The config maps roles → models.
 
 | Role | Does | Default | Read/write |
 |------|------|---------|-----------|
 | **orchestrator** | classify · run the recipe · reason on the prelude · synthesize · adversarially judge/verify | harness profile | you (this session) + peer instances you spawn for judging |
+| **senior** | implement work-graph nodes classified **hard** (Step 2) | profile `senior`, else the profile's top tier | writes |
 | **builder** | implement code · write prose · run tests to verify | harness profile | writes |
 | **scout** | search · locate · map · external research | harness profile | read-only |
+
+Large-build mode adds two roles on top of these: a **manager** (the orchestrator, owning
+the plan, merge order and decision ledger) and two or three workstream **leads** (top tier
+by default), each running its own builders. See `workflows/large-build.md`.
 
 **Swapping the orchestrator = swapping the whole top tier.** A natural-language model
 override applies only when that model is advertised by the active harness; it always beats
@@ -108,6 +121,10 @@ keywords overlap, oracles don't.
 **Flavors ride on a base workflow** (they toggle stages, they are not their own route):
 refactor · test · docs · small-migration → **implement**; security-audit → **review**.
 
+**Large build is a scale mode of implement**, not a seventh workflow: same oracle, run by a
+manager and workstream leads. It fires on an explicit ask ("large build", "big build", "run
+this as a managed build") or from the work graph (Step 2b).
+
 If two workflows genuinely tie, or the request is too vague to classify, **ask one
 question** — do not guess. If the picked workflow is `enabled: false` in config, say so and
 route to the closest enabled one (or ask). The user can force a workflow in natural language
@@ -127,7 +144,7 @@ Each node is one self-contained unit of work:
 | `does` | one line: what this node makes true |
 | `owns` | files/modules it may write — nodes that run concurrently must own **disjoint** sets |
 | `needs` | ids of nodes that must be **merged** before this one starts |
-| `role` | scout / builder / orchestrator |
+| `role` | scout / builder / senior / orchestrator |
 
 Add an edge `A → B` (B needs A) when any of these hold:
 
@@ -149,6 +166,35 @@ Then read the graph:
 - **Waves** are the topological layers: wave 0 has no `needs`, wave *k* needs only earlier
   waves. Nodes in a wave are the parallel fan-out, capped at `workflows.<name>.maxParallel`.
 
+**Classify each writing node's tier.** Default to `builder`. Mark a node `senior` when any
+of these hold, and record the reason in one line:
+
+- **Blocker** — several nodes `need` it (often the contract node itself); an error there
+  propagates downstream.
+- **High-stakes domain** — concurrency, security/auth/crypto, data migration, money.
+- **Novel logic** — a new algorithm or invariant-heavy code, not wiring to a contract.
+- **Contract gaps** — the builder must make design calls the prelude couldn't settle.
+- **Untested blast radius** — cross-module change with no tests pinning the behavior.
+
+Do not classify by size: a large mechanical edit is `builder`; a 20-line lock-ordering fix
+is `senior`. Cap senior nodes at `workflows.<name>.maxSenior`; if more qualify, the contract
+is unfinished — tighten the prelude instead of buying a bigger model. A senior node is still
+a delegated builder (the `implementer` agent with the senior model) — don't build it inline
+as the orchestrator. The user can override any node's tier in natural language.
+
+### Step 2b — Scale up to large-build
+
+After building an **implement** graph, count its **workstreams**: remove the shared
+contract node(s) and count the connected groups left (by `needs` edges) that own disjoint
+areas. Switch to large-build mode when `largeBuild.enabled` is true and the graph has
+**at least `largeBuild.minWorkstreams` workstreams and at least `largeBuild.minNodes`
+writing nodes**. Below either, stay in plain implement. An explicit "large build" request
+switches regardless of the threshold, and an explicit "don't" keeps plain implement. If
+`largeBuild.enabled` is false, an explicit request still wins: flag it once and go on.
+
+Large build never fires for read-only workflows, debug, or optimize. When it fires, run
+`workflows/large-build.md` instead of `workflows/implement.md` in Step 3.
+
 Collapse the graph when it's trivial: a single node, or a straight chain of small edits, is
 just sequential work — don't build ceremony around it. Read-only workflows (research,
 design, review, debug hypotheses) usually produce a flat graph of independent legs; the
@@ -158,13 +204,15 @@ graph matters most for **implement** and **optimize**, where nodes write.
 
 Read this package's `skills/orchestrate/workflows/<workflow>.md` and follow it. Each
 recipe specifies its prelude, its fan-out (which role, how many, what each does), and its
-convergence. It also lists the flavors that ride on it and which stages they toggle.
+convergence. It also lists the flavors that ride on it and which stages they toggle. In
+large-build mode (Step 2b) the recipe is `workflows/large-build.md`.
 
 ## Step 4 — Announce, then act per `autonomy`
 
 Announce the plan compactly before spawning anything: the **detected workflow** (and why),
 the **prelude**, the **work graph**, the tier each node runs on, and the **convergence**.
-Show the graph as a table (`id · does · owns · needs · role`) followed by its waves and
+Show the graph as a table (`id · does · owns · needs · role · why`, with `why` filled for
+senior nodes) followed by its waves and
 critical path, e.g. `wave 0: contract → wave 1: api, ui → wave 2: e2e`.
 
 - **`propose`** (default): stop after announcing and wait for approval. Pick the run id now
@@ -172,6 +220,9 @@ critical path, e.g. `wave 0: contract → wave 1: api, ui → wave 2: e2e`.
 - **`auto`**: run immediately.
 - **`threshold`**: run immediately only if `parallel legs <= threshold.maxParallelAuto`
   **and** `files touched <= threshold.maxFilesAuto`; otherwise fall back to `propose`.
+
+When Step 2b switched to large build **on its own** (no explicit ask), always propose
+first, whatever `autonomy` says: the user should see the bigger run before it starts.
 
 **Approval and the script grant.** This skill pre-approves its worktree script
 (`allowed-tools`) only for the turn that invokes the skill; the grant clears when the user
@@ -188,13 +239,14 @@ branch, so concurrent builders never share a checkout:
   writer works in the main checkout.
 - **`always`**: every writing node gets a worktree, even alone.
 - **`off`**: builders share the main checkout — the disjoint-`owns` rule is then the only
-  thing keeping parallel writers apart, so be strict about it.
+  thing keeping parallel writers apart, so be strict about it. The status gate (item 5
+  below) still applies; there is just no worktree to discard.
 
 Read-only nodes always run in the main checkout. All worktree operations go through the
 bundled script — never run `git worktree` or `git branch -D` by hand:
 
 ```
-${CLAUDE_SKILL_DIR}/scripts/worktree.sh create  <run> <node> [base]   # prints the worktree path
+${CLAUDE_SKILL_DIR}/scripts/worktree.sh create  <run> <node> [base] [--link <path>]...   # prints the path
 ${CLAUDE_SKILL_DIR}/scripts/worktree.sh merge   <run> <node>          # commit + merge into the current branch
 ${CLAUDE_SKILL_DIR}/scripts/worktree.sh status  [run]
 ${CLAUDE_SKILL_DIR}/scripts/worktree.sh remove  <run> <node> [--force]
@@ -214,18 +266,40 @@ Execute the graph wave by wave:
 2. **Create** a worktree for each ready writing node in the wave. It branches from the
    current `HEAD`, which already contains every earlier wave's merged work — that is how a
    node sees what it `needs`.
-3. **Brief** each builder with its worktree path as its working root: *"Work only inside
+3. **Make it buildable.** A fresh worktree holds only tracked files — no installed
+   dependencies, env files, or build output — so a builder can't run its check without help:
+   - pass `--link <path>` to `create` for each entry in `worktrees.link` (e.g.
+     `node_modules`, `.venv`, `.env`). The script symlinks it from the main checkout and only
+     accepts gitignored paths. Linked dependencies are **shared**: a node must not install
+     or upgrade packages through a link — if it needs a new dependency, that's its own
+     upstream node.
+   - if `worktrees.setup` is set, run it inside the new worktree (`cd <path> && <setup>`) as
+     an ordinary command, under normal permissions. It deliberately doesn't go through the
+     script: the script is pre-approved, and config-supplied commands must not inherit that.
+4. **Brief** each builder with its worktree path as its working root: *"Work only inside
    `<path>`. Use absolute paths under it for every read and edit, and `cd <path>` in every
-   shell command. Do not commit — leave your changes in the worktree."* Do **not** also pass
-   the harness's own worktree isolation (e.g. `isolation: "worktree"`); the script already
-   isolated it.
-4. **Merge** each finished node with `merge <run> <node>`. It commits whatever the builder
+   shell command. Do not commit — leave your changes in the worktree."* Plus its **node
+   check**: the narrowest test/typecheck/lint command that covers what it `owns`. Do **not**
+   also pass the harness's own worktree isolation (e.g. `isolation: "worktree"`); the script
+   already isolated it.
+5. **Gate on the result.** Every builder's reply opens with a status (see Step 6). Decide
+   per node before merging:
+   - **`DONE`** — skim the diff (`git -C <path> diff --stat`) for out-of-scope files, then
+     merge. Merge on the check passing and the diff matching the brief, not on the worker's
+     own account of its work.
+   - **`NO_OP`** — nothing to merge; `remove` the worktree. If the graph *expected* this
+     node to change something, treat it as a signal, not a pass: either the work was already
+     done or the brief was wrong. Check which before releasing the nodes that `need` it.
+   - **`BLOCKED`** — the builder already spent its one correction pass. Don't merge; keep
+     the worktree, and decide yourself: fix the brief and re-run, absorb the fix, or stop the
+     nodes downstream of it. A broken node never reaches the main branch.
+6. **Merge** each `DONE` node with `merge <run> <node>`. It commits whatever the builder
    left, then merges the branch into the current branch with `--no-ff`. Exit `3` means a
    conflict: the merge is aborted and the worktree kept. A conflict between nodes the graph
    called independent is a missing edge — resolve it yourself (orchestrator), or re-run the
    node from a fresh worktree on the new `HEAD`.
-5. **Remove** each merged node's worktree right away (`remove <run> <node>`) so long runs
-   don't pile up checkouts, then start the next wave.
+7. **Remove** each merged node's worktree right away (`remove <run> <node>`) so long runs
+   don't pile up checkouts, then start the next ready nodes.
 
 Don't wait for a whole wave if a node's blockers are all merged — start it as soon as it's
 ready. The waves are the plan; readiness is the schedule.
@@ -248,11 +322,22 @@ Boundaries:    what to leave alone; when it's done
 
 - Launch all **parallel** legs **in one message** (multiple Agent calls) so they run concurrently.
 - **Cap** parallel legs at `workflows.<name>.maxParallel`. Prefer fewer well-scoped agents.
+- **Every writing leg returns a status first**: `DONE` · `NO_OP` · `BLOCKED` (the
+  `implementer` agent already does). Say in the brief that no change is an acceptable
+  answer — otherwise a builder handed already-clean code will invent a tweak to look useful.
+  Read-only legs need no status; "nothing found" is already their valid result.
 - Pass an explicit model only when `alwaysPassModelExplicitly` is true **and** the resolved
   model is advertised by the active harness. Use that harness's spawn API and parameter
   spelling; otherwise omit it and inherit the harness default.
+- A `senior` node uses the same builder agent and brief; only the model differs (the
+  resolved `senior` role). If the senior model can't be validated for this harness, run the
+  node at the builder tier and say so in the report.
 - **Cascade** (`escalation.scoutToBuilder`): if a scout leg returns thin/low-confidence
   output, re-run that one leg at the builder tier before giving up.
+- **Cascade** (`escalation.builderToSenior`): if a builder node fails its check or reports the
+  contract is insufficient, re-run that one node once at the senior tier — `remove <run>
+  <node> --force`, then `create` it fresh on the current `HEAD`. Escalations don't count
+  against `maxSenior`. A senior node that fails comes back to the orchestrator.
 
 ## Step 7 — Converge and synthesize
 
@@ -285,7 +370,8 @@ checkouts behind. `status` lists anything left over; `cleanup --all` sweeps ever
 
 ## Arguments
 
-- `go <run>` — the user approved the announced plan for `<run>`; execute it from Step 5.
+- `go <run>` — the user approved the announced plan for `<run>`; execute it from Step 5. For
+  a large-build run with an existing status file, resume from it (`large-build.md`).
 - `cleanup <run>` (or `cleanup --all`) — run Step 8 only and report what was removed/kept.
 - anything else — the task to orchestrate.
 
