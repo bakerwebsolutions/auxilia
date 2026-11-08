@@ -85,6 +85,7 @@ Common edits and where they land:
 | "only two leads" | `largeBuild.maxLeads: 2` |
 | "run leads on a different model" | `roles.lead` (or `roles.manager` for the manager) |
 | "keep the decision ledger in the repo" | `largeBuild.ledger: "docs/decisions/<run>.md"` |
+| "write decisions to our decision log" | `largeBuild.projectLog: "<path>"` (`auto` detects it, `none` uses the MR/PR description) |
 
 ## Mode C — Explain / dry-run
 

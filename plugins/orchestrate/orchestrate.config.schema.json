@@ -151,6 +151,11 @@
           "type": "string",
           "default": ".orchestrate/runs/<run>/decisions.md"
         },
+        "projectLog": {
+          "description": "Where durable decisions (behavior, spec/contract, money, cost, vendor, data shape) are also written. auto = detect the project's decision log (named in CLAUDE.md/AGENTS.md, decision-log.md, DECISIONS.md, an ADR directory); a path = that file or ADR directory, relative to the main checkout; none = no project log, copy them into the MR/PR description and the final report.",
+          "type": "string",
+          "default": "auto"
+        },
         "status": {
           "description": "Status file path, relative to the main checkout; <run> is replaced by the run id. Rewritten at every checkpoint so a resumed or replacement manager can continue.",
           "type": "string",

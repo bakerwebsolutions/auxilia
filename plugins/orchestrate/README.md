@@ -83,9 +83,12 @@ autonomous run), implement runs as **large build**
 ([`workflows/large-build.md`](skills/orchestrate/workflows/large-build.md)):
 
 - A **manager** (the orchestrator) owns the plan, the merge order, MR boundaries and a
-  **decision ledger** — one file, the only place design calls are written. Each entry says
+  **decision ledger** — one run file where every design call is written. Each entry says
   who decided; anything an agent decided reads "agent decision, not reviewed by the user".
-  At the end the manager lists the unreviewed entries for you to confirm or reject.
+  Durable decisions (behavior, spec/contract, money, cost, vendor, data shape) also go into
+  the project's own decision log, in its format and signed as an agent decision, or into the
+  MR/PR description when there is none. At the end the manager lists the unreviewed durable
+  decisions for you to confirm or reject.
 - **Two or three workstream leads** (the senior tier by default) each own one area and run
   its builders and verifiers in per-node worktrees. Leads hand gated nodes up; only the
   manager merges.
@@ -203,7 +206,7 @@ wins per key), so your user config sets global defaults and a repo overrides spe
   "escalation": { "scoutToBuilder": true, "builderToSenior": true },
   "largeBuild": {
     "enabled": true, "minWorkstreams": 2, "minNodes": 8, "maxLeads": 3, "maxParallel": 6,
-    "ledger": ".orchestrate/runs/<run>/decisions.md",
+    "ledger": ".orchestrate/runs/<run>/decisions.md", "projectLog": "auto",
     "status": ".orchestrate/runs/<run>/status.md"
   },
   "doctrine": "standard",
@@ -231,6 +234,7 @@ wins per key), so your user config sets global defaults and a repo overrides spe
 | `largeBuild.minWorkstreams` / `minNodes` | int | Auto-switch threshold: both must be met (default 2 workstreams, 8 writing nodes). |
 | `largeBuild.maxLeads` | int ≥ 2 | Cap on workstream leads (default 3). |
 | `largeBuild.maxParallel` | int | Cap on concurrent builders + verifiers across all leads (default 6). |
+| `largeBuild.projectLog` | `auto` · path · `none` | Where durable decisions are also written: auto-detect the project's decision log, a given file/ADR directory, or none (MR/PR description + final report). |
 | `largeBuild.ledger` / `status` | path with `<run>` | Decision ledger and status file, relative to the main checkout (default under the git-excluded `.orchestrate/runs/<run>/`). |
 | `threshold.maxParallelAuto` / `maxFilesAuto` | int | Limits used when `autonomy=threshold`. |
 | `doctrine` | `off` · `standard` · `strict` | How forcefully the `SessionStart` hook injects the doctrine (`off` disables it). |

@@ -65,6 +65,8 @@ Each entry:
 - Decision: what was chosen
 - Why: the reason, and the main alternative rejected
 - Affects: contract sections, nodes, MRs
+- Kind: durable | implementation
+- Project log: <where it was copied, or "PR description">  (durable only)
 - Review: unreviewed
 ```
 
@@ -73,6 +75,31 @@ made that call in this conversation; then it is `user, in conversation` with the
 quoted. An agent never puts the user's name on a decision it made, and never upgrades an
 entry to `user` because the user didn't object. A replacement manager keeps every entry's
 `Decided by` as written.
+
+**Kind.** A **durable** decision changes behavior, a spec or contract, money, cost, a
+vendor, or a data shape (schema, API payload, stored format). Everything else is
+**implementation**: naming, file layout, internal structure, refactors. Implementation
+decisions stay in the ledger and the commits. Durable ones also go somewhere that outlives
+the run, because the ledger's default path is git-excluded and local.
+
+**Where durable decisions go.** Write each one into the project's own decision log as soon as
+it is made, in addition to the ledger:
+
+1. `largeBuild.projectLog` if it is a path (`none` skips to step 3).
+2. Otherwise (`auto`, the default) detect one: a log the project's `CLAUDE.md`/`AGENTS.md`
+   names; else `docs/**/decision-log.md`, `DECISIONS.md`, `docs/**/decisions.md`, or an ADR
+   directory (`docs/adr/`, `docs/decisions/`, `adr/`). If several match, ask the user once
+   at checkpoint 1 which one.
+3. No project log: copy the durable decisions into the description of the MR/PR they ship
+   in, and into the final report.
+
+Write the entry in **the project's own format** (match its existing entries: heading style,
+fields, numbering, one ADR file per decision if that's the convention), commit it with the
+change it governs, and record where it went in the ledger's `Project log` line. Sign it as
+an agent decision, never in the user's name. The default wording is
+`Agent, <YYYY-MM-DD> (not reviewed by <user>)`. **A project's own signing rule wins** — if its
+`CLAUDE.md`/`AGENTS.md` or the log's header says how agent decisions are signed, use that.
+When the user confirms or rejects a decision, update the project log entry too.
 
 **Review.** `unreviewed` until the user answers at the final checkpoint (or earlier); then
 `confirmed by user` or `rejected by user: <what instead>`. A rejected entry gets a new entry
@@ -109,15 +136,17 @@ as a question.
 3. **Set MR boundaries and merge order.** Group nodes into MRs/PRs that each build and pass
    on their own, ordered by `needs`. The contract usually ships first, alone.
 4. **Open the ledger** with every design call the contract made, each marked
-   `agent decision, not reviewed by the user` unless the user made it in conversation.
-   Write the status file.
+   `agent decision, not reviewed by the user` unless the user made it in conversation, and
+   tagged durable or implementation. Find the project decision log (see the ledger
+   section) and copy the durable ones into it. Write the status file.
 5. Commit the contract on the main checkout (router Step 5, item 1) — the base every
    workstream builds on.
 
 **Checkpoint 1 — plan and contract ready.** Report: the workstreams and their leads (with
 models), the graph table and waves per workstream, the MR list and merge order, the
-contract, the ledger entries so far, and whether leads spawn their own builders or run as
-planning leads. This is the router's Step 4 announcement; under `propose` (and always when
+contract, the durable ledger entries so far, where durable decisions will be written (the
+project log found, or the MR/PR descriptions), and whether leads spawn their own builders or
+run as planning leads. This is the router's Step 4 announcement; under `propose` (and always when
 the router picked this mode on its own) wait for approval. Pushing branches and opening
 MRs/PRs happens only if the approved plan says so.
 
@@ -155,8 +184,9 @@ keeps building the nodes that don't.
 
 The manager then either:
 
-- **decides** it, writes a ledger entry (`agent decision, not reviewed by the user`),
-  updates and commits the contract if it changed, and tells every affected lead; or
+- **decides** it, writes a ledger entry (`agent decision, not reviewed by the user`) and,
+  if it is durable, the project log entry, updates and commits the contract if it changed,
+  and tells every affected lead; or
 - **stops and asks the user** when the call is theirs to make: cost or spend, a new vendor
   or paid service, product direction, or reversing something the user said. That is
   checkpoint 3. Workstreams that don't depend on the answer keep running.
@@ -196,8 +226,11 @@ entries involved, and what is still running. Update the status file to `blocked 
   stops partway still updates the status file first, so it can resume.
 
 **Final report.** What shipped per MR (links, check results), what didn't and why, kept
-worktrees and their paths, and **every ledger entry still `unreviewed`**, listed for the
-user to confirm or reject one by one. Record their answers in the ledger.
+worktrees and their paths, and **every durable decision still `unreviewed`** (with where
+each was written), listed for the user to confirm or reject one by one. Implementation
+entries aren't listed; the ledger path is given for anyone who wants them. With no project
+log, the durable decisions are written out in full here. Record the answers in the ledger
+and the project log.
 
 ## Notes
 

@@ -27,7 +27,7 @@ repo overrides specifics:
 Keys you act on: `roles.{orchestrator,senior,builder,scout,manager,lead}`, `autonomy`,
 `threshold.*`, `workflows.<name>.{enabled,maxParallel,maxSenior}`,
 `escalation.{scoutToBuilder,builderToSenior}`, `worktrees.{mode,cleanup,link,setup}`,
-`largeBuild.{enabled,minWorkstreams,minNodes,maxLeads,maxParallel,ledger,status}`,
+`largeBuild.{enabled,minWorkstreams,minNodes,maxLeads,maxParallel,ledger,projectLog,status}`,
 `harness`, `harnessProfiles`, and `alwaysPassModelExplicitly`. Defaults if no file: detect
 the harness from its available delegation tool, use its profile, and inherit a role when no
 supported model can be established. Never pass a Claude alias to Codex or a Codex model ID

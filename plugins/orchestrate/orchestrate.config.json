@@ -46,6 +46,7 @@
     "maxLeads": 3,
     "maxParallel": 6,
     "ledger": ".orchestrate/runs/<run>/decisions.md",
+    "projectLog": "auto",
     "status": ".orchestrate/runs/<run>/status.md"
   },
   "doctrine": "standard",
