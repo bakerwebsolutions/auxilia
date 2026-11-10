@@ -1,0 +1,11 @@
+{
+  "name": "handoff",
+  "description": "Write a self-contained prompt that lets a fresh session pick up the current work cold: goal-driven extraction (not a summary), with verified/unverified claims, dead ends, and a first step. Saves to a collision-free file in /tmp or a repo-configured directory and copies it to the clipboard.",
+  "version": "1.0.0",
+  "author": {
+    "name": "Dallan Baker",
+    "email": "dallan@bakerwebsolutions.com"
+  },
+  "homepage": "https://github.com/bakerwebsolutions/auxilia/tree/master/plugins/handoff",
+  "license": "MIT"
+}
