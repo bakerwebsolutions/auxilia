@@ -1,6 +1,6 @@
 # handoff
 
-**Version:** 1.0.0
+**Version:** 1.1.0
 
 `/handoff` writes a prompt that lets a fresh agent session (or another harness, or a
 colleague) pick up the current work with no other context. It extracts what the next
@@ -11,6 +11,9 @@ task needs, which makes it different from `/compact`'s summary of everything:
   `[unverified]`, and claims are re-checked against git and the files before writing.
 - **Dead ends and hazards:** what failed and why, plus the user's standing rules, so the
   next session doesn't repeat mistakes.
+- **Runs last with other skills:** `/handoff` together with `/orchestrate` (or a review,
+  a design) does that skill's work first and puts its output in the handoff: one file
+  with the plan, not a plan in chat and a handoff without it.
 - **Cold-read check:** before saving, the skill confirms a stranger could take the
   first step without asking anything.
 
