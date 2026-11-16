@@ -21,6 +21,24 @@ context can act on it. Write it for a stranger arriving cold.
 
 ## Procedure
 
+### 0. Run last when other skills came with it
+
+Handoff packages work; it doesn't produce any. If other skills were invoked in the same
+request (`/orchestrate`, a review, a design or research skill), treat it as one request
+with one deliverable:
+
+1. Do those skills' work first, up to where each one stops on its own: an announced
+   plan waiting for approval, a review report, a chosen design.
+2. Then write the handoff **from what they produced**. Copy their artifacts into the
+   prompt instead of summarizing them: a plan's run id, work-graph table, waves,
+   checks and approval command; a review's findings with file:line.
+3. Make **First step** continue *their* flow, for example "get approval for run
+   `<id>`, then `/orchestrate go <id>`", not restart the work from scratch.
+
+Don't deliver the other skill's output and the handoff as two separate things. When
+the user asks for a handoff *after* another skill already ran this session, the same
+rule applies: its output is part of the state to carry.
+
 ### 1. Resolve where it goes
 
 ```bash
@@ -116,6 +134,8 @@ Reread it as someone with only this file. Fix anything that fails:
 - Do any pronouns or nicknames ("the bug", "option B", "the new script") point to
   something the file never defines?
 - Is every state claim tagged?
+- If another skill ran with this one (step 0), is its artifact in the file, not only
+  in the chat?
 
 ### 5. Deliver
 
